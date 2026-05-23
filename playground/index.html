@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="LenAI Developer Portal — Unified media inference API playground">
+    <title>LenAI — Developer Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <!-- Modal Overlay -->
+    <div id="modal-overlay" class="modal-overlay hidden">
+        <div class="modal-content glass-card">
+            <div class="modal-header">
+                <h3 id="modal-title"></h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <div class="app-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-icon">
+                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                        <defs>
+                            <linearGradient id="brandGrad" x1="0" y1="0" x2="32" y2="32">
+                                <stop offset="0%" stop-color="#6366f1"/>
+                                <stop offset="100%" stop-color="#a855f7"/>
+                            </linearGradient>
+                        </defs>
+                        <rect width="32" height="32" rx="8" fill="url(#brandGrad)"/>
+                        <text x="7" y="23" font-size="18" font-weight="700" fill="white" font-family="Inter">L</text>
+                    </svg>
+                </div>
+                <span class="brand-name">Len<span class="brand-accent">AI</span></span>
+                <span class="brand-badge">v1.0</span>
+            </div>
+
+            <div class="sidebar-status" id="system-status">
+                <span class="status-dot status-checking"></span>
+                <span class="status-text">Checking...</span>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="#playground" class="nav-item active" data-tab="playground">
+                    <span class="nav-icon">🎨</span>
+                    <span class="nav-label">Playground</span>
+                </a>
+                <a href="#keys" class="nav-item" data-tab="keys">
+                    <span class="nav-icon">🔑</span>
+                    <span class="nav-label">API Keys</span>
+                </a>
+                <a href="#usage" class="nav-item" data-tab="usage">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-label">Usage</span>
+                </a>
+                <a href="#docs" class="nav-item" data-tab="docs">
+                    <span class="nav-icon">📖</span>
+                    <span class="nav-label">API Docs</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="api-key-input">
+                    <label for="global-api-key">API Key</label>
+                    <div class="input-group">
+                        <input type="password" id="global-api-key" placeholder="lenai_sk_..." autocomplete="off">
+                        <button class="btn-icon" onclick="toggleKeyVisibility()" title="Toggle visibility">👁</button>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Playground Tab -->
+            <section id="tab-playground" class="tab-content active">
+                <div class="page-header">
+                    <h1>Playground</h1>
+                    <p class="page-subtitle">Test inference models in real-time</p>
+                </div>
+
+                <!-- Modality Selector -->
+                <div class="modality-grid">
+                    <button class="modality-card active" data-modality="image" onclick="selectModality('image')">
+                        <span class="modality-icon">🖼️</span>
+                        <span class="modality-name">Image</span>
+                        <span class="modality-desc">Text → Image</span>
+                    </button>
+                    <button class="modality-card" data-modality="voice_stt" onclick="selectModality('voice_stt')">
+                        <span class="modality-icon">🎤</span>
+                        <span class="modality-name">Speech → Text</span>
+                        <span class="modality-desc">Audio transcription</span>
+                    </button>
+                    <button class="modality-card" data-modality="voice_tts" onclick="selectModality('voice_tts')">
+                        <span class="modality-icon">🔊</span>
+                        <span class="modality-name">Text → Speech</span>
+                        <span class="modality-desc">Voice synthesis</span>
+                    </button>
+                    <button class="modality-card" data-modality="video" onclick="selectModality('video')">
+                        <span class="modality-icon">🎬</span>
+                        <span class="modality-name">Video</span>
+                        <span class="modality-desc">Style transfer</span>
+                    </button>
+                </div>
+
+                <!-- Dynamic Form -->
+                <div class="playground-layout">
+                    <div class="form-panel glass-card">
+                        <h3>Parameters</h3>
+                        <form id="inference-form" onsubmit="submitInference(event)">
+                            <!-- Image params (default) -->
+                            <div id="params-image" class="param-group">
+                                <div class="form-field">
+                                    <label for="img-prompt">Prompt</label>
+                                    <textarea id="img-prompt" name="prompt" rows="3" placeholder="A beautiful sunset over mountains, oil painting style..."></textarea>
+                                </div>
+                                <div class="form-field">
+                                    <label for="img-negative">Negative Prompt</label>
+                                    <textarea id="img-negative" name="negative_prompt" rows="2" placeholder="blurry, low quality, distorted..."></textarea>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-field">
+                                        <label for="img-width">Width</label>
+                                        <select id="img-width" name="width">
+                                            <option value="256">256</option>
+                                            <option value="384">384</option>
+                                            <option value="512" selected>512</option>
+                                            <option value="768">768</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-field">
+                                        <label for="img-height">Height</label>
+                                        <select id="img-height" name="height">
+                                            <option value="256">256</option>
+                                            <option value="384">384</option>
+                                            <option value="512" selected>512</option>
+                                            <option value="768">768</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-field">
+                                    <label for="img-steps">Steps: <span id="steps-value">20</span></label>
+                                    <input type="range" id="img-steps" name="steps" min="1" max="50" value="20" oninput="document.getElementById('steps-value').textContent=this.value">
+                                </div>
+                                <div class="form-field">
+                                    <label for="img-cfg">CFG Scale: <span id="cfg-value">7.0</span></label>
+                                    <input type="range" id="img-cfg" name="cfg_scale" min="1" max="20" step="0.5" value="7" oninput="document.getElementById('cfg-value').textContent=this.value">
+                                </div>
+                            </div>
+
+                            <!-- Voice STT params -->
+                            <div id="params-voice_stt" class="param-group hidden">
+                                <div class="form-field">
+                                    <label>Audio File</label>
+                                    <div class="drop-zone" id="stt-dropzone">
+                                        <input type="file" id="stt-file" name="file" accept="audio/*" class="file-input" onchange="handleFileSelect(this)">
+                                        <div class="drop-zone-content">
+                                            <span class="drop-icon">📁</span>
+                                            <p>Drag & drop audio file or <span class="link">browse</span></p>
+                                            <p class="drop-hint">WAV, MP3, M4A, FLAC, OGG (max 100MB)</p>
+                                        </div>
+                                        <div class="drop-zone-preview hidden" id="stt-preview">
+                                            <span class="file-icon">🎵</span>
+                                            <span class="file-name" id="stt-filename"></span>
+                                            <button type="button" class="btn-icon" onclick="clearFile('stt')">✕</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-field">
+                                    <label for="stt-language">Language (optional)</label>
+                                    <select id="stt-language" name="language">
+                                        <option value="">Auto-detect</option>
+                                        <option value="en">English</option>
+                                        <option value="es">Spanish</option>
+                                        <option value="fr">French</option>
+                                        <option value="de">German</option>
+                                        <option value="ja">Japanese</option>
+                                        <option value="zh">Chinese</option>
+                                        <option value="hi">Hindi</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Voice TTS params -->
+                            <div id="params-voice_tts" class="param-group hidden">
+                                <div class="form-field">
+                                    <label for="tts-text">Text</label>
+                                    <textarea id="tts-text" name="text" rows="4" placeholder="Enter text to synthesize into speech..."></textarea>
+                                </div>
+                                <div class="form-field">
+                                    <label for="tts-voice">Voice</label>
+                                    <select id="tts-voice" name="voice">
+                                        <option value="af_bella">Bella (Female)</option>
+                                        <option value="af_nicole">Nicole (Female)</option>
+                                        <option value="af_sarah">Sarah (Female)</option>
+                                        <option value="am_adam">Adam (Male)</option>
+                                        <option value="am_michael">Michael (Male)</option>
+                                    </select>
+                                </div>
+                                <div class="form-field">
+                                    <label for="tts-speed">Speed: <span id="speed-value">1.0</span>x</label>
+                                    <input type="range" id="tts-speed" name="speed" min="0.5" max="2" step="0.1" value="1" oninput="document.getElementById('speed-value').textContent=this.value">
+                                </div>
+                            </div>
+
+                            <!-- Video params -->
+                            <div id="params-video" class="param-group hidden">
+                                <div class="form-field">
+                                    <label for="vid-prompt">Style Prompt</label>
+                                    <textarea id="vid-prompt" name="prompt" rows="3" placeholder="Apply watercolor painting style..."></textarea>
+                                </div>
+                                <div class="form-field">
+                                    <label>Source File</label>
+                                    <div class="drop-zone" id="vid-dropzone">
+                                        <input type="file" id="vid-file" name="file" accept="video/*,image/*" class="file-input" onchange="handleFileSelect(this)">
+                                        <div class="drop-zone-content">
+                                            <span class="drop-icon">🎬</span>
+                                            <p>Drag & drop video or image or <span class="link">browse</span></p>
+                                            <p class="drop-hint">MP4, AVI, MOV, PNG, JPG (max 100MB)</p>
+                                        </div>
+                                        <div class="drop-zone-preview hidden" id="vid-preview">
+                                            <span class="file-icon">📎</span>
+                                            <span class="file-name" id="vid-filename"></span>
+                                            <button type="button" class="btn-icon" onclick="clearFile('vid')">✕</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="webhook-url">Webhook URL (optional)</label>
+                                <input type="url" id="webhook-url" name="webhook_url" placeholder="https://example.com/webhook">
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-lg" id="submit-btn">
+                                <span class="btn-text">Submit</span>
+                                <span class="btn-loader hidden">
+                                    <span class="spinner"></span> Submitting...
+                                </span>
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Results Panel -->
+                    <div class="results-panel glass-card">
+                        <h3>Result</h3>
+                        <div id="result-area">
+                            <div class="empty-state">
+                                <span class="empty-icon">⚡</span>
+                                <p>Submit a request to see results here</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- API Keys Tab -->
+            <section id="tab-keys" class="tab-content hidden">
+                <div class="page-header">
+                    <h1>API Keys</h1>
+                    <p class="page-subtitle">Manage your API authentication keys</p>
+                    <button class="btn btn-primary" onclick="showCreateKeyModal()">
+                        + Create Key
+                    </button>
+                </div>
+
+                <div class="glass-card">
+                    <table class="data-table" id="keys-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Prefix</th>
+                                <th>Scopes</th>
+                                <th>Rate Limit</th>
+                                <th>Last Used</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="keys-tbody">
+                            <tr><td colspan="7" class="empty-cell">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Usage Tab -->
+            <section id="tab-usage" class="tab-content hidden">
+                <div class="page-header">
+                    <h1>Usage Dashboard</h1>
+                    <p class="page-subtitle">Monitor your API consumption and performance</p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon">📈</div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="stat-total-requests">—</span>
+                            <span class="stat-label">Total Requests</span>
+                        </div>
+                    </div>
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon">⚡</div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="stat-avg-latency">—</span>
+                            <span class="stat-label">Avg Latency</span>
+                        </div>
+                    </div>
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon">❌</div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="stat-error-rate">—</span>
+                            <span class="stat-label">Error Rate</span>
+                        </div>
+                    </div>
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon">💾</div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="stat-storage">—</span>
+                            <span class="stat-label">Storage Used</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="charts-grid">
+                    <div class="glass-card chart-container">
+                        <h3>Requests Over Time</h3>
+                        <canvas id="requests-chart" width="600" height="200"></canvas>
+                    </div>
+                    <div class="glass-card chart-container">
+                        <h3>Usage by Modality</h3>
+                        <canvas id="modality-chart" width="300" height="200"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Docs Tab -->
+            <section id="tab-docs" class="tab-content hidden">
+                <div class="page-header">
+                    <h1>API Documentation</h1>
+                    <p class="page-subtitle">Interactive OpenAPI documentation</p>
+                </div>
+                <div class="glass-card docs-frame-wrapper">
+                    <iframe id="docs-iframe" src="/docs" title="API Documentation"></iframe>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
