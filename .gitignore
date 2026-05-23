@@ -1,10 +1,73 @@
-# Python-generated files
-__pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
+# Environment
+.env
+.env.local
+.env.*.local
 
-# Virtual environments
-.venv
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+*.whl
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Model weights (downloaded at runtime)
+models/weights/
+*.ckpt
+*.safetensors
+*.bin
+*.pt
+*.pth
+!models/download.sh
+
+# MinIO data
+minio_data/
+
+# PostgreSQL data
+pg_data/
+
+# Redis data
+redis_data/
+
+# Logs
+logs/
+*.log
+
+# Test / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Node (playground)
+node_modules/
+playground/dist/
+
+# Modal
+.modal/
+
+# Uploaded/generated media
+uploads/
+outputs/
+temp/
+
+# Locust reports
+locust_report*.html

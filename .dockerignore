@@ -1,0 +1,19 @@
+# LenAI root .dockerignore (for nginx build context)
+.git
+.gitignore
+.env
+.env.*
+*.md
+docs/
+tests/
+scripts/
+models/
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.mypy_cache
+htmlcov
+*.egg-info
+.vscode
+.idea

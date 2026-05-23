@@ -1,7 +1,15 @@
 [project]
 name = "len-ai"
-version = "0.1.0"
-description = "Add your description here"
+version = "1.0.0"
+description = "Production Media Inference API Platform — unified REST API for image, video, and voice inference"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.11"
 dependencies = []
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
