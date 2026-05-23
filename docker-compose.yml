@@ -1,0 +1,367 @@
+# ============================================================
+# LenAI Media Inference Platform — Docker Compose
+# ============================================================
+# Usage:
+#   cp .env.example .env          # edit with real values
+#   docker compose up -d          # start all services
+#   docker compose logs -f        # tail logs
+#
+# For GPU support, layer the GPU override:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+# ============================================================
+
+services:
+  # --------------------------------------------------------
+  # Infrastructure Services
+  # --------------------------------------------------------
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: lenai-postgres
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lenai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-lenai}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lenai} -d ${POSTGRES_DB:-lenai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+    networks:
+      - app_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: lenai-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+    networks:
+      - app_net
+
+  minio:
+    image: quay.io/minio/minio
+    container_name: lenai-minio
+    restart: unless-stopped
+    env_file: .env
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+    networks:
+      - app_net
+
+  # --------------------------------------------------------
+  # Application Services
+  # --------------------------------------------------------
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: lenai-api
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "2.0"
+    networks:
+      - app_net
+      - model_net
+
+  worker:
+    build:
+      context: ./api
+      dockerfile: ../worker/Dockerfile
+    container_name: lenai-worker
+    restart: unless-stopped
+    env_file: .env
+    # Worker uses the same codebase as api but with worker entrypoint
+    entrypoint: ["tini", "--"]
+    command: ["/app/entrypoint.sh"]
+    volumes:
+      - ./worker/entrypoint.sh:/app/entrypoint.sh:ro
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping --timeout 5 2>/dev/null | grep -q 'pong' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+    networks:
+      - app_net
+      - model_net
+
+  celery-beat:
+    build:
+      context: ./api
+      dockerfile: ../worker/Dockerfile
+    container_name: lenai-celery-beat
+    restart: unless-stopped
+    env_file: .env
+    entrypoint: ["tini", "--"]
+    command: ["celery", "-A", "app.workers.celery_app", "beat", "--loglevel=info"]
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.25"
+    networks:
+      - app_net
+
+  # --------------------------------------------------------
+  # Model Inference Services
+  # --------------------------------------------------------
+
+  sd:
+    build:
+      context: ./sd
+      dockerfile: Dockerfile
+    container_name: lenai-sd
+    restart: unless-stopped
+    environment:
+      SD_MODEL_ID: ${SD_MODEL_ID:-runwayml/stable-diffusion-v1-5}
+      SD_MODEL_CACHE: /models
+    volumes:
+      - sd_models:/models
+    ports:
+      - "7860:7860"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:7860/sdapi/v1/options"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: "4.0"
+    networks:
+      - model_net
+
+  whisper:
+    image: onerahmet/openai-whisper-asr-webservice:latest
+    container_name: lenai-whisper
+    restart: unless-stopped
+    environment:
+      ASR_MODEL: ${ASR_MODEL:-tiny}
+      ASR_ENGINE: openai_whisper
+    ports:
+      - "9090:9000"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "2.0"
+    networks:
+      - model_net
+
+  kokoro:
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:latest
+    container_name: lenai-kokoro
+    restart: unless-stopped
+    ports:
+      - "8880:8880"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8880/v1/models"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "2.0"
+    networks:
+      - model_net
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: lenai-qdrant
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:6333/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "1.0"
+    networks:
+      - app_net
+      - model_net
+
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: lenai-vllm
+    restart: unless-stopped
+    environment:
+      MODEL_NAME: ${LLM_MODEL:-meta-llama/Llama-3.1-8B-Instruct}
+    command: >
+      --model ${LLM_MODEL:-meta-llama/Llama-3.1-8B-Instruct}
+      --host 0.0.0.0
+      --port 8000
+      --max-model-len 4096
+      --dtype auto
+      --trust-remote-code
+    ports:
+      - "8001:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 300s
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+          cpus: "4.0"
+    networks:
+      - model_net
+
+  # --------------------------------------------------------
+  # Reverse Proxy
+  # --------------------------------------------------------
+
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    container_name: lenai-nginx
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "80:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/nginx-health"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+    networks:
+      - app_net
+
+# --------------------------------------------------------
+# Networks
+# --------------------------------------------------------
+networks:
+  app_net:
+    driver: bridge
+    name: lenai-app-net
+  model_net:
+    driver: bridge
+    name: lenai-model-net
+
+# --------------------------------------------------------
+# Volumes
+# --------------------------------------------------------
+volumes:
+  pg_data:
+    name: lenai-pg-data
+  redis_data:
+    name: lenai-redis-data
+  minio_data:
+    name: lenai-minio-data
+  sd_models:
+    name: lenai-sd-models
+  qdrant_data:
+    name: lenai-qdrant-data

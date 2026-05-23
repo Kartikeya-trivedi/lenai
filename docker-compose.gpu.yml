@@ -1,0 +1,84 @@
+# ============================================================
+# LenAI — GPU Override for Docker Compose
+# ============================================================
+# Layer this on top of the base compose file:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+#
+# Requires:
+#   - NVIDIA Container Toolkit installed
+#   - Docker configured with nvidia runtime
+# ============================================================
+
+services:
+  sd:
+    build:
+      context: ./sd
+      dockerfile: Dockerfile
+      args:
+        # When GPU override is active, install CUDA-enabled PyTorch
+        TORCH_INDEX_URL: https://download.pytorch.org/whl/cu121
+    environment:
+      NVIDIA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-all}
+    deploy:
+      resources:
+        limits:
+          memory: 12G
+          cpus: "4.0"
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  whisper:
+    environment:
+      ASR_MODEL: ${ASR_MODEL:-base}
+      NVIDIA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-all}
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: "2.0"
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  kokoro:
+    image: ghcr.io/remsky/kokoro-fastapi-gpu:latest
+    environment:
+      NVIDIA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-all}
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: "2.0"
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  vllm:
+    environment:
+      NVIDIA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-all}
+    command: >
+      --model ${LLM_MODEL:-meta-llama/Llama-3.1-8B-Instruct}
+      --host 0.0.0.0
+      --port 8000
+      --max-model-len 8192
+      --dtype float16
+      --gpu-memory-utilization 0.9
+      --trust-remote-code
+    deploy:
+      resources:
+        limits:
+          memory: 24G
+          cpus: "4.0"
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+

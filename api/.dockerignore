@@ -1,0 +1,29 @@
+# ============================================================
+# LenAI API — .dockerignore
+# ============================================================
+.git
+.gitignore
+.env*
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+dist
+build
+.eggs
+.pytest_cache
+.coverage
+htmlcov
+coverage.xml
+*.md
+.vscode
+.idea
+*.swp
+*.swo
+Thumbs.db
+.DS_Store
+tests/
+locust_report*.html
+.ruff_cache
