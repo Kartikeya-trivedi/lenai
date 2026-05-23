@@ -1,0 +1,161 @@
+# LenAI Model Registry
+# ─────────────────────────────────────────────────────────────
+# Config-driven model discovery. Adding a new model is a YAML edit + restart.
+# No code changes required.
+#
+# Each model entry defines:
+#   - modality: which inference type this model serves
+#   - endpoint: internal Docker network URL
+#   - health_check: path to health/readiness endpoint
+#   - input_schema: parameter validation rules
+#   - output_format: expected output file type
+#   - max_concurrent: max parallel requests (prevents OOM)
+#   - timeout_seconds: per-request timeout
+#   - resource_limits: docker resource allocation hints
+
+models:
+  stable-diffusion-v1:
+    modality: image
+    endpoint: http://sd:7860
+    health_check: /sdapi/v1/options
+    input_schema:
+      prompt:
+        type: string
+        required: true
+        max_length: 1000
+      negative_prompt:
+        type: string
+        required: false
+        max_length: 500
+      width:
+        type: integer
+        default: 512
+        min: 128
+        max: 1024
+      height:
+        type: integer
+        default: 512
+        min: 128
+        max: 1024
+      steps:
+        type: integer
+        default: 20
+        min: 1
+        max: 50
+      cfg_scale:
+        type: float
+        default: 7.0
+        min: 1.0
+        max: 30.0
+      seed:
+        type: integer
+        default: -1
+    output_format: png
+    max_concurrent: 1
+    timeout_seconds: 300
+    resource_limits:
+      cpu: "4.0"
+      memory: "8G"
+
+  whisper-large:
+    modality: voice_stt
+    endpoint: http://whisper:9000
+    health_check: /health
+    input_schema:
+      audio_file:
+        type: file
+        required: true
+        max_size_mb: 100
+        formats:
+          - wav
+          - mp3
+          - m4a
+          - flac
+          - ogg
+          - webm
+      language:
+        type: string
+        required: false
+    output_format: json
+    max_concurrent: 2
+    timeout_seconds: 600
+    resource_limits:
+      cpu: "2.0"
+      memory: "4G"
+
+  kokoro-tts:
+    modality: voice_tts
+    endpoint: http://kokoro:8880
+    health_check: /v1/models
+    input_schema:
+      text:
+        type: string
+        required: true
+        max_length: 5000
+      voice:
+        type: string
+        default: af_bella
+        options:
+          - af_bella
+          - af_nicole
+          - af_sarah
+          - am_adam
+          - am_michael
+          - bf_emma
+          - bf_isabella
+          - bm_george
+          - bm_lewis
+      speed:
+        type: float
+        default: 1.0
+        min: 0.5
+        max: 2.0
+    output_format: mp3
+    max_concurrent: 2
+    timeout_seconds: 120
+    resource_limits:
+      cpu: "2.0"
+      memory: "2G"
+
+  video-style-transfer:
+    modality: video
+    endpoint: http://sd:7860
+    health_check: /sdapi/v1/options
+    input_schema:
+      source_file:
+        type: file
+        required: true
+        max_size_mb: 100
+        formats:
+          - mp4
+          - avi
+          - mov
+          - webm
+          - png
+          - jpg
+          - jpeg
+      prompt:
+        type: string
+        required: true
+        max_length: 1000
+      fps:
+        type: integer
+        default: 8
+        min: 1
+        max: 30
+      max_frames:
+        type: integer
+        default: 24
+        min: 1
+        max: 120
+      denoising_strength:
+        type: float
+        default: 0.5
+        min: 0.0
+        max: 1.0
+    output_format: mp4
+    max_concurrent: 1
+    timeout_seconds: 600
+    resource_limits:
+      cpu: "4.0"
+      memory: "8G"
