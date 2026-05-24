@@ -59,6 +59,10 @@ inference_image = (
     .run_function(download_whisper_weights, volumes={CACHE_DIR: model_volume})
 )
 
+# Read ignore patterns
+with open(".modalignore", "r") as f:
+    ignore_patterns = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+
 # Image for the FastAPI API Gateway
 api_image = (
     modal.Image.debian_slim(python_version="3.11")
@@ -66,12 +70,12 @@ api_image = (
     .add_local_dir(
         "./api/app", 
         remote_path="/root/app", 
-        ignore=modal.FilePatternMatcher.from_file(".modalignore")
+        ignore=ignore_patterns
     )
     .add_local_dir(
         "./playground", 
         remote_path="/root/playground",
-        ignore=modal.FilePatternMatcher.from_file(".modalignore")
+        ignore=ignore_patterns
     )
 )
 
