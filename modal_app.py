@@ -68,24 +68,18 @@ vllm_image = (
     .pip_install("vllm==0.5.4") # Pinned for stability
 )
 
-# Read ignore patterns
-with open(".modalignore", "r") as f:
-    ignore_patterns = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+# Ignore patterns for local dir mounting (no file reading - runs inside container too)
+ignore_patterns = [
+    "__pycache__/", "*.pyc", ".pytest_cache", ".ruff_cache",
+    ".mypy_cache", ".venv/", "venv/", ".git", ".env", ".env.*",
+]
 
 # Image for the FastAPI API Gateway
 api_image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install_from_requirements("api/requirements.txt")
-    .add_local_dir(
-        "./api/app", 
-        remote_path="/root/app", 
-        ignore=ignore_patterns
-    )
-    .add_local_dir(
-        "./playground", 
-        remote_path="/root/playground",
-        ignore=ignore_patterns
-    )
+    .add_local_dir("./api/app", remote_path="/root/app", ignore=ignore_patterns)
+    .add_local_dir("./playground", remote_path="/root/playground", ignore=ignore_patterns)
 )
 
 # ---------------------------------------------------------------------------
