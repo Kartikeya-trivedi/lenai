@@ -118,10 +118,18 @@ def generate_image_modal(prompt: str, negative_prompt: str = "", width: int = 51
 @app.function(
     image=api_image,
     secrets=[modal.Secret.from_name("lenai-db-secret")], # Connects to Supabase
-    mounts=[modal.Mount.from_local_dir("./api/app", remote_path="/root/app")]
+    mounts=[
+        modal.Mount.from_local_dir("./api/app", remote_path="/root/app"),
+        modal.Mount.from_local_dir("./playground", remote_path="/root/playground")
+    ]
 )
 @modal.asgi_app()
 def api_gateway():
     """Mounts the entire FastAPI application onto Modal."""
     from app.main import app as fastapi_app
+    from fastapi.staticfiles import StaticFiles
+    
+    # Mount the frontend directory so Modal serves the Developer Playground!
+    fastapi_app.mount("/playground", StaticFiles(directory="/root/playground", html=True), name="playground")
+    
     return fastapi_app
