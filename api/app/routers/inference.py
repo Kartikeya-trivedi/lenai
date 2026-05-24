@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -41,6 +41,7 @@ VALID_MODALITIES = {m.value for m in Modality}
 )
 async def create_inference_job(
     modality: str,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     api_key: ApiKey = Depends(get_current_api_key),
     # Image / TTS / Video params come as JSON body
@@ -119,7 +120,7 @@ async def create_inference_job(
                 job_data["error_message"] = str(e)
                 FAKE_JOBS[jid] = job_data
                 
-        asyncio.create_task(run_modal_demo(str(job_id), modality, params))
+        background_tasks.add_task(run_modal_demo, str(job_id), modality, params)
         
         return InferenceResponse(
             job_id=job_id,
