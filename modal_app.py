@@ -144,6 +144,7 @@ def vllm_server():
     cmd = [
         "python", "-m", "vllm.entrypoints.openai.api_server",
         "--model", "/models/llama-3.1-8b-instruct",
+        "--max-model-len", "8192",  # Restrict from default 131k to avoid OOM and 5-min startup profiling
         "--port", "8000"
     ]
     subprocess.Popen(cmd)
