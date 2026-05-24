@@ -106,6 +106,8 @@ While the default setup runs locally via Docker Compose, LenAI is designed to be
    modal deploy modal_app.py
    ```
 
+**Cloud LLM & RAG Support:** The Modal script is configured to spin up an **A10G GPU** on-demand to run an enterprise-grade `vLLM` server serving `Llama 3.1 8B`. It automatically mounts the `ktgpt-rag-models` volume to instantly load your cached LLM, embedding, and reranker weights without redownloading them.
+
 ---
 
 ## Quick Start

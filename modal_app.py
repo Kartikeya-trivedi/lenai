@@ -18,6 +18,9 @@ app = modal.App("lenai-platform")
 model_volume = modal.Volume.from_name("lenai-models", create_if_missing=True)
 CACHE_DIR = "/models"
 
+# The pre-existing volume containing Llama 3.1 8B, Gemma 27B, and the RAG embedding/reranker models
+rag_models_volume = modal.Volume.from_name("ktgpt-rag-models")
+
 # ---------------------------------------------------------------------------
 # Container Image Definitions
 # ---------------------------------------------------------------------------
@@ -57,6 +60,12 @@ inference_image = (
     .apt_install("ffmpeg")
     .run_function(download_sd_weights, volumes={CACHE_DIR: model_volume})
     .run_function(download_whisper_weights, volumes={CACHE_DIR: model_volume})
+)
+
+# Image for the vLLM OpenAI-compatible server
+vllm_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .pip_install("vllm==0.5.4") # Pinned for stability
 )
 
 # Read ignore patterns
@@ -123,6 +132,28 @@ def generate_image_modal(prompt: str, negative_prompt: str = "", width: int = 51
 
 
 # ---------------------------------------------------------------------------
+# Serverless LLM / RAG Engine (vLLM)
+# ---------------------------------------------------------------------------
+@app.function(
+    image=vllm_image,
+    gpu="A10G", # 24GB VRAM (perfect for Llama 3.1 8B fp16)
+    volumes={"/models": rag_models_volume},
+    allow_concurrent_inputs=100,
+    scaledown_window=300, # Keep the LLM warm for 5 minutes
+)
+@modal.web_server(8000, startup_timeout=300)
+def vllm_server():
+    """Starts the vLLM OpenAI-compatible server on port 8000."""
+    import subprocess
+    cmd = [
+        "python", "-m", "vllm.entrypoints.openai.api_server",
+        "--model", "/models/llama-3.1-8b-instruct",
+        "--port", "8000"
+    ]
+    subprocess.Popen(cmd)
+
+
+# ---------------------------------------------------------------------------
 # API Gateway
 # ---------------------------------------------------------------------------
 # We import the FastAPI app instance from our existing code
@@ -132,10 +163,17 @@ def generate_image_modal(prompt: str, negative_prompt: str = "", width: int = 51
 @app.function(
     image=api_image,
     secrets=[modal.Secret.from_name("lenai-db-secret")], # Connects to Supabase
+    volumes={"/models": rag_models_volume} # Mount RAG embedding models
 )
 @modal.asgi_app()
 def api_gateway():
     """Mounts the entire FastAPI application onto Modal."""
+    import os
+    # Dynamically inject the vLLM server URL and point to local RAG models
+    os.environ["VLLM_API_URL"] = vllm_server.web_url
+    os.environ["EMBEDDING_MODEL"] = "/models/multilingual-e5-large"
+    os.environ["RERANKER_MODEL"] = "/models/ms-marco-MiniLM-L-6-v2"
+    
     from app.main import app as fastapi_app
     from fastapi.staticfiles import StaticFiles
     
