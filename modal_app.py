@@ -63,6 +63,16 @@ inference_image = (
 api_image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install_from_requirements("api/requirements.txt")
+    .add_local_dir(
+        "./api/app", 
+        remote_path="/root/app", 
+        ignore=modal.FilePatternMatcher.from_file(".modalignore")
+    )
+    .add_local_dir(
+        "./playground", 
+        remote_path="/root/playground",
+        ignore=modal.FilePatternMatcher.from_file(".modalignore")
+    )
 )
 
 # ---------------------------------------------------------------------------
@@ -72,7 +82,7 @@ api_image = (
     image=inference_image,
     gpu="T4",
     volumes={CACHE_DIR: model_volume},
-    container_idle_timeout=120, # Keep container warm for 2 mins after a request
+    scaledown_window=120, # Keep container warm for 2 mins after a request
 )
 def generate_image_modal(prompt: str, negative_prompt: str = "", width: int = 512, height: int = 512, steps: int = 20):
     """Generates an image using Stable Diffusion on a Serverless T4 GPU."""
@@ -118,10 +128,6 @@ def generate_image_modal(prompt: str, negative_prompt: str = "", width: int = 51
 @app.function(
     image=api_image,
     secrets=[modal.Secret.from_name("lenai-db-secret")], # Connects to Supabase
-    mounts=[
-        modal.Mount.from_local_dir("./api/app", remote_path="/root/app"),
-        modal.Mount.from_local_dir("./playground", remote_path="/root/playground")
-    ]
 )
 @modal.asgi_app()
 def api_gateway():
