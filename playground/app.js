@@ -210,15 +210,27 @@ async function submitInference(e) {
             }
         }
 
-        // Add webhook URL if set
-        const webhookUrl = document.getElementById('webhook-url').value;
-        if (webhookUrl) formData.append('webhook_url', webhookUrl);
+        if (currentModality === 'rag') {
+            const payload = {
+                question: document.getElementById('rag-question').value,
+                top_k: parseInt(document.getElementById('rag-top-k').value),
+                rerank_top_k: parseInt(document.getElementById('rag-rerank-k').value),
+                use_cache: document.getElementById('rag-use-cache').checked
+            };
+            const data = await ApiClient.post('/v1/rag/query', payload, false);
+            showToast('RAG Query Completed', 'success');
+            renderRagResult(data);
+        } else {
+            // Add webhook URL if set
+            const webhookUrl = document.getElementById('webhook-url').value;
+            if (webhookUrl) formData.append('webhook_url', webhookUrl);
 
-        const data = await ApiClient.post(`/v1/infer/${currentModality}`, formData, true);
+            const data = await ApiClient.post(`/v1/infer/${currentModality}`, formData, true);
 
-        showToast(`Job submitted: ${data.job_id}`, 'success');
-        renderJobResult(data);
-        startPolling(data.job_id);
+            showToast(`Job submitted: ${data.job_id}`, 'success');
+            renderJobResult(data);
+            startPolling(data.job_id);
+        }
 
     } catch (err) {
         showToast(err.message, 'error');
@@ -280,6 +292,52 @@ function renderJobResult(data) {
             <div class="progress-fill" style="width: 0%"></div>
         </div>
         <div id="result-output"></div>
+        <button class="json-toggle" onclick="toggleResultJson()">Show raw JSON ▾</button>
+        <div class="result-json hidden" id="result-json">${syntaxHighlight(data)}</div>
+    `;
+}
+
+function renderRagResult(data) {
+    const area = document.getElementById('result-area');
+    
+    // Determine confidence color
+    let confColor = 'var(--accent-red)';
+    if (data.confidence > 0.8) confColor = 'var(--accent-green)';
+    else if (data.confidence > 0.5) confColor = 'var(--accent-yellow)';
+
+    // Build sources HTML
+    const sourcesHtml = data.sources.map((src, i) => `
+        <details class="rag-source-detail">
+            <summary>
+                <span class="rag-source-idx">[${i+1}]</span> 
+                <span class="rag-source-name">${escapeHtml(src.source)}</span>
+                <span class="rag-source-score">Score: ${(src.score * 100).toFixed(1)}%</span>
+            </summary>
+            <div class="rag-source-text">${escapeHtml(src.text)}</div>
+        </details>
+    `).join('');
+
+    area.innerHTML = `
+        <div class="rag-header">
+            <span class="status-badge completed" style="border-color: ${confColor}; color: ${confColor}">
+                <span class="badge-dot" style="background: ${confColor}"></span>
+                Confidence: ${(data.confidence * 100).toFixed(1)}%
+            </span>
+            <span class="status-badge" style="background: rgba(99, 102, 241, 0.1); color: var(--accent-indigo);">
+                🤖 ${data.model_used}
+            </span>
+            ${data.cached ? '<span class="status-badge" style="background: rgba(6, 182, 212, 0.1); color: #06b6d4;">⚡ Cached</span>' : ''}
+        </div>
+        
+        <div class="rag-answer">
+            ${data.answer.replace(/\n/g, '<br>')}
+        </div>
+
+        <div class="rag-sources">
+            <h4 style="margin-bottom: 8px; color: var(--text-secondary); font-size: 0.85rem;">Retrieved Context</h4>
+            ${sourcesHtml}
+        </div>
+
         <button class="json-toggle" onclick="toggleResultJson()">Show raw JSON ▾</button>
         <div class="result-json hidden" id="result-json">${syntaxHighlight(data)}</div>
     `;

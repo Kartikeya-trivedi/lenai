@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 
-from passlib.hash import bcrypt
+import bcrypt
 from sqlalchemy import Boolean, DateTime, Integer, String
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -63,12 +63,12 @@ class ApiKey(UUIDMixin, TimestampMixin, Base):
 
     def verify_key(self, raw_key: str) -> bool:
         """Verify a raw API key against stored hash."""
-        return bcrypt.verify(raw_key, self.key_hash)
+        return bcrypt.checkpw(raw_key.encode(), self.key_hash.encode())
 
     @staticmethod
     def hash_key(raw_key: str) -> str:
         """Hash a raw API key for storage."""
-        return bcrypt.hash(raw_key)
+        return bcrypt.hashpw(raw_key.encode(), bcrypt.gensalt()).decode()
 
     @staticmethod
     def generate_key() -> str:

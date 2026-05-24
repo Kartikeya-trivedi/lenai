@@ -94,6 +94,20 @@ Smaller models (8B) are faster and cheaper but hallucinate more on edge cases. W
 
 ---
 
+## Cloud Deployment (Modal + Supabase)
+
+While the default setup runs locally via Docker Compose, LenAI is designed to be instantly deployable to the cloud using **Modal** for serverless GPU inference and **Supabase** for managed PostgreSQL.
+
+1. **Supabase Database:** Set up a Supabase project and get the **Transaction Pooler** URL (port 6543). See [`supabase_setup.md`](supabase_setup.md) for details.
+2. **Modal Secrets:** Save the Supabase connection string (`postgresql+asyncpg://...`) as a Modal Secret named `lenai-db-secret`.
+3. **Deploy:** Run the Modal deployment script, which dynamically builds container images, downloads model weights (SD v1.5, Whisper) into a cached Modal Volume, and deploys the FastAPI gateway:
+   ```bash
+   pip install modal
+   modal deploy modal_app.py
+   ```
+
+---
+
 ## Quick Start
 
 ### Prerequisites

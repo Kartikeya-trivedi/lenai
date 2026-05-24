@@ -111,6 +111,11 @@
                         <span class="modality-name">Video</span>
                         <span class="modality-desc">Style transfer</span>
                     </button>
+                    <button class="modality-card" data-modality="rag" onclick="selectModality('rag')">
+                        <span class="modality-icon">🧠</span>
+                        <span class="modality-name">RAG</span>
+                        <span class="modality-desc">Knowledge Query</span>
+                    </button>
                 </div>
 
                 <!-- Dynamic Form -->
@@ -234,6 +239,38 @@
                                             <button type="button" class="btn-icon" onclick="clearFile('vid')">✕</button>
                                         </div>
                                     </div>
+                                </div>
+                            </div>
+
+                            <!-- RAG params -->
+                            <div id="params-rag" class="param-group hidden">
+                                <div class="form-field">
+                                    <label for="rag-question">Question</label>
+                                    <textarea id="rag-question" name="question" rows="3" placeholder="What is the standard protocol for...?"></textarea>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-field">
+                                        <label for="rag-top-k">Retrieve Chunks (Top K)</label>
+                                        <select id="rag-top-k" name="top_k">
+                                            <option value="5">5</option>
+                                            <option value="10" selected>10</option>
+                                            <option value="20">20</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-field">
+                                        <label for="rag-rerank-k">Keep Chunks (Rerank K)</label>
+                                        <select id="rag-rerank-k" name="rerank_top_k">
+                                            <option value="3">3</option>
+                                            <option value="5" selected>5</option>
+                                            <option value="10">10</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-field">
+                                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-primary);">
+                                        <input type="checkbox" id="rag-use-cache" checked>
+                                        Use Semantic Cache
+                                    </label>
                                 </div>
                             </div>
 

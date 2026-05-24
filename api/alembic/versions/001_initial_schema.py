@@ -30,8 +30,10 @@ def upgrade() -> None:
     )
 
     # Create enums explicitly
-    op.execute("CREATE TYPE IF NOT EXISTS jobstatus AS ENUM ('pending', 'queued', 'processing', 'completed', 'failed', 'dead_letter')")
-    op.execute("CREATE TYPE IF NOT EXISTS modality AS ENUM ('image', 'video', 'voice_stt', 'voice_tts')")
+    op.execute("DROP TYPE IF EXISTS jobstatus")
+    op.execute("CREATE TYPE jobstatus AS ENUM ('pending', 'queued', 'processing', 'completed', 'failed', 'dead_letter')")
+    op.execute("DROP TYPE IF EXISTS modality")
+    op.execute("CREATE TYPE modality AS ENUM ('image', 'video', 'voice_stt', 'voice_tts')")
 
     # ── api_keys table ─────────────────────────────────────────
     op.create_table(
