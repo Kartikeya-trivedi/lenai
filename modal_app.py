@@ -162,7 +162,7 @@ def vllm_server():
 
 @app.function(
     image=api_image,
-    secrets=[modal.Secret.from_name("lenai-db-secret")], # Connects to Supabase
+    # secrets=[modal.Secret.from_name("lenai-db-secret")], # Commented out so deployment passes without DB
     volumes={"/models": rag_models_volume} # Mount RAG embedding models
 )
 @modal.asgi_app()
