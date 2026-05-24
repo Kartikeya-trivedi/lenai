@@ -166,7 +166,7 @@ def api_gateway():
     """Mounts the entire FastAPI application onto Modal."""
     import os
     # Dynamically inject the vLLM server URL and point to local RAG models
-    os.environ["VLLM_API_URL"] = vllm_server.web_url
+    os.environ["VLLM_API_URL"] = vllm_server.web_url.url if hasattr(vllm_server.web_url, 'url') else getattr(vllm_server, "get_web_url", lambda: vllm_server.web_url)()
     os.environ["EMBEDDING_MODEL"] = "/models/multilingual-e5-large"
     os.environ["RERANKER_MODEL"] = "/models/ms-marco-MiniLM-L-6-v2"
     os.environ["SKIP_AUTH"] = "true"  # Bypass API key validation (no DB)

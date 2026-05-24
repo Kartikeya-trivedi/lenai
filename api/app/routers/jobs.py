@@ -48,6 +48,11 @@ async def get_job(
                 created_at=datetime.now(timezone.utc),
                 tenant_id=uuid.uuid4()
             )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Job {job_id} not found in demo state (server might have restarted)",
+            )
 
     service = JobService(db)
     job = await service.get_job(job_id, api_key.tenant_id)
