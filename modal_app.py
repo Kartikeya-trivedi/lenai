@@ -7,7 +7,6 @@ for media inference, downloading weights into a volume during build time.
 """
 
 import modal
-from fastapi import FastAPI
 
 # ---------------------------------------------------------------------------
 # Modal App & Volume Configuration
