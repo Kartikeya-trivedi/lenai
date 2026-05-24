@@ -137,7 +137,7 @@ def generate_image_modal(prompt: str, negative_prompt: str = "", width: int = 51
     scaledown_window=300, # Keep the LLM warm for 5 minutes
 )
 @modal.concurrent(max_inputs=100)
-@modal.web_server(8000, startup_timeout=300)
+@modal.web_server(8000, startup_timeout=900)
 def vllm_server():
     """Starts the vLLM OpenAI-compatible server on port 8000."""
     import subprocess

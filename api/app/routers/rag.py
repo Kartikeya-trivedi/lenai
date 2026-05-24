@@ -71,6 +71,7 @@ async def query_knowledge_base(
                 sources=[],
                 confidence=1.0,
                 model_used="meta-llama/Llama-3.1-8B-Instruct (Direct Mode)",
+                retrieval_stats={"candidates": 0, "reranked": 0, "retrieval_ms": 0, "rerank_ms": 0, "total_ms": 0},
                 cached=False
             )
         except Exception as e:
@@ -80,6 +81,7 @@ async def query_knowledge_base(
                 sources=[],
                 confidence=0.0,
                 model_used="error",
+                retrieval_stats={"candidates": 0, "reranked": 0, "retrieval_ms": 0, "rerank_ms": 0, "total_ms": 0},
                 cached=False
             )
 
