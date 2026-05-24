@@ -95,17 +95,14 @@ async def create_inference_job(
             try:
                 import modal
                 if mod == Modality.IMAGE.value:
-                    f = modal.Function.lookup("lenai-platform", "generate_image_modal")
-                    loop = asyncio.get_event_loop()
-                    def _run():
-                        return f.remote(
-                            prompt=p.get("prompt", "A beautiful sunset") or "A beautiful sunset",
-                            negative_prompt=p.get("negative_prompt", ""),
-                            width=int(p.get("width", 512) or 512),
-                            height=int(p.get("height", 512) or 512),
-                            steps=int(p.get("steps", 20) or 20)
-                        )
-                    base64_img = await loop.run_in_executor(None, _run)
+                    f = modal.Function.from_name("lenai-platform", "generate_image_modal")
+                    base64_img = await f.remote.aio(
+                        prompt=p.get("prompt", "A beautiful sunset") or "A beautiful sunset",
+                        negative_prompt=p.get("negative_prompt", ""),
+                        width=int(p.get("width", 512) or 512),
+                        height=int(p.get("height", 512) or 512),
+                        steps=int(p.get("steps", 20) or 20)
+                    )
                     FAKE_JOBS[jid]["status"] = "completed"
                     FAKE_JOBS[jid]["output_url"] = f"data:image/png;base64,{base64_img}"
                     FAKE_JOBS[jid]["progress"] = 100

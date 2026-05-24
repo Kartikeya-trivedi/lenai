@@ -1,15 +1,17 @@
 import axios from 'axios';
 
 // Get API URL from env, default to local if running in dev without .env
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://kartikeya-trivedi--lenai-gateway-fastapi-app.modal.run';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://mindrix--lenai-platform-api-gateway.modal.run';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-    // Inject a dummy key since we are in SKIP_AUTH mode
-    'Authorization': 'Bearer lenai_sk_dummy',
-  }
+});
+
+// Guarantee headers are injected on every request
+api.interceptors.request.use(config => {
+  config.headers['X-API-Key'] = 'lenai_sk_dummy';
+  config.headers['Content-Type'] = 'application/json';
+  return config;
 });
 
 export const ApiClient = {
