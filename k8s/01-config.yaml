@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lenai
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lenai-config
+  namespace: lenai
+data:
+  # Database & Redis URLs (pointing to K8s internal DNS names)
+  POSTGRES_USER: "lenai"
+  POSTGRES_DB: "lenai"
+  DATABASE_URL: "postgresql+asyncpg://lenai:changeme@postgres:5432/lenai"
+  REDIS_URL: "redis://redis:6379/0"
+  
+  # MinIO
+  MINIO_ENDPOINT: "minio:9000"
+  MINIO_PUBLIC_ENDPOINT: "localhost:9000"
+  MINIO_USE_SSL: "false"
+  MINIO_BUCKET_INPUTS: "inputs"
+  MINIO_BUCKET_OUTPUTS: "outputs"
+  
+  # API & App Config
+  API_HOST: "0.0.0.0"
+  API_PORT: "8000"
+  API_WORKERS: "2"
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "json"
+  CORS_ORIGINS: '["*"]'
+  
+  # Models (pointing to K8s services)
+  SD_API_URL: "http://sd:7860"
+  WHISPER_API_URL: "http://whisper:9000"
+  KOKORO_API_URL: "http://kokoro:8880"
+  VLLM_API_URL: "http://vllm:8000"
+  
+  # RAG config
+  QDRANT_URL: "http://qdrant:6333"
+  EMBEDDING_MODEL: "intfloat/multilingual-e5-large"
+  RERANKER_MODEL: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+  
+  # Worker config
+  CELERY_CONCURRENCY: "2"
+  CLEANUP_INTERVAL_MINUTES: "60"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: lenai-secrets
+  namespace: lenai
+type: Opaque
+stringData:
+  # In a real production environment, these would be injected via external secrets managers (e.g. AWS Secrets Manager, Hashicorp Vault)
+  POSTGRES_PASSWORD: "changeme"
+  MINIO_ROOT_USER: "minioadmin"
+  MINIO_ROOT_PASSWORD: "minioadmin"
+  API_SECRET_KEY: "changeme_api_secret_key_min_32_characters"

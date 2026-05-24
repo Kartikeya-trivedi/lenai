@@ -1,0 +1,108 @@
+# Application Deployments (API, Worker, Celery Beat)
+# Note: You need to build your Docker images and push them to a registry (e.g., Docker Hub, ECR, GCR)
+# For this example, we assume images are named lenai/api:latest, etc.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: lenai
+spec:
+  replicas: 2 # Scale up the API stateless gateway
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+        - name: api
+          image: lenai/api:latest # Replace with your actual image
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: lenai-config
+            - secretRef:
+                name: lenai-secrets
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /readiness
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: lenai
+spec:
+  replicas: 2 # Scale up workers to handle queues
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      containers:
+        - name: worker
+          image: lenai/worker:latest # Replace with your actual image
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: lenai-config
+            - secretRef:
+                name: lenai-secrets
+          resources:
+            requests:
+              cpu: "1"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-beat
+  namespace: lenai
+spec:
+  replicas: 1 # Celery Beat must only have 1 replica to prevent duplicate schedules
+  selector:
+    matchLabels:
+      app: celery-beat
+  template:
+    metadata:
+      labels:
+        app: celery-beat
+    spec:
+      containers:
+        - name: celery-beat
+          image: lenai/worker:latest # Same image as worker, different command
+          imagePullPolicy: IfNotPresent
+          command: ["celery", "-A", "app.workers.celery_app", "beat", "--loglevel=info"]
+          envFrom:
+            - configMapRef:
+                name: lenai-config
+            - secretRef:
+                name: lenai-secrets
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"

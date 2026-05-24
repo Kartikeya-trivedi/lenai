@@ -1,0 +1,126 @@
+# AI Models Deployments
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sd
+  namespace: lenai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sd
+  template:
+    metadata:
+      labels:
+        app: sd
+    spec:
+      # Optional: Target GPU nodes
+      # nodeSelector:
+      #   cloud.google.com/gke-accelerator: nvidia-tesla-t4
+      containers:
+        - name: sd
+          image: lenai/sd:latest
+          ports:
+            - containerPort: 7860
+          volumeMounts:
+            - name: model-weights
+              mountPath: /models
+          resources:
+            limits:
+              # nvidia.com/gpu: 1
+              cpu: "4"
+              memory: "8Gi"
+      volumes:
+        - name: model-weights
+          persistentVolumeClaim:
+            claimName: model-weights-pvc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: whisper
+  namespace: lenai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: whisper
+  template:
+    metadata:
+      labels:
+        app: whisper
+    spec:
+      containers:
+        - name: whisper
+          image: onerahmet/openai-whisper-asr-webservice:latest
+          env:
+            - name: ASR_MODEL
+              value: "tiny"
+          ports:
+            - containerPort: 9000
+          resources:
+            limits:
+              # nvidia.com/gpu: 1
+              cpu: "2"
+              memory: "4Gi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kokoro
+  namespace: lenai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kokoro
+  template:
+    metadata:
+      labels:
+        app: kokoro
+    spec:
+      containers:
+        - name: kokoro
+          image: ghcr.io/remsky/kokoro-fastapi-cpu:latest
+          ports:
+            - containerPort: 8880
+          resources:
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm
+  namespace: lenai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm
+  template:
+    metadata:
+      labels:
+        app: vllm
+    spec:
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:latest
+          command: ["python3", "-m", "vllm.entrypoints.openai.api_server"]
+          args: ["--model", "meta-llama/Llama-3.1-8B-Instruct", "--dtype", "auto", "--max-model-len", "4096"]
+          ports:
+            - containerPort: 8000
+          volumeMounts:
+            - name: model-weights
+              mountPath: /root/.cache/huggingface
+          resources:
+            limits:
+              # nvidia.com/gpu: 1
+              cpu: "8"
+              memory: "32Gi"
+      volumes:
+        - name: model-weights
+          persistentVolumeClaim:
+            claimName: model-weights-pvc
