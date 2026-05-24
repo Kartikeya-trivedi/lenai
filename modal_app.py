@@ -78,8 +78,9 @@ ignore_patterns = [
 api_image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install_from_requirements("api/requirements.txt")
+    .pip_install("aiofiles")  # Required by FastAPI StaticFiles
     .add_local_dir("./api/app", remote_path="/root/app", ignore=ignore_patterns)
-    .add_local_dir("./playground", remote_path="/root/playground", ignore=ignore_patterns)
+    .add_local_dir("./playground", remote_path="/root/playground", copy=True)  # Bake into image
 )
 
 # ---------------------------------------------------------------------------
