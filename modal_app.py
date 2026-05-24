@@ -79,8 +79,9 @@ api_image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install_from_requirements("api/requirements.txt")
     .pip_install("aiofiles")  # Required by FastAPI StaticFiles
+    # add_local_dir MUST come last in the build chain
     .add_local_dir("./api/app", remote_path="/root/app", ignore=ignore_patterns)
-    .add_local_dir("./playground", remote_path="/root/playground", copy=True)  # Bake into image
+    .add_local_dir("./playground", remote_path="/root/playground")
 )
 
 # ---------------------------------------------------------------------------
@@ -168,6 +169,7 @@ def api_gateway():
     os.environ["VLLM_API_URL"] = vllm_server.web_url
     os.environ["EMBEDDING_MODEL"] = "/models/multilingual-e5-large"
     os.environ["RERANKER_MODEL"] = "/models/ms-marco-MiniLM-L-6-v2"
+    os.environ["SKIP_AUTH"] = "true"  # Bypass API key validation (no DB)
     
     from app.main import app as fastapi_app
     from fastapi.staticfiles import StaticFiles

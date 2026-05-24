@@ -40,6 +40,22 @@ async def get_current_api_key(
       HTTPException 401: invalid or revoked key
       QuotaExceededError: rate limit exceeded
     """
+    import os
+    # Allow bypassing auth for serverless deployments without a DB
+    if os.getenv("SKIP_AUTH", "").lower() == "true":
+        # Return a mock ApiKey-like object with full access
+        from types import SimpleNamespace
+        return SimpleNamespace(
+            id=uuid.uuid4(),
+            tenant_id=uuid.uuid4(),
+            key_prefix="demo_key",
+            name="demo",
+            scopes=["image", "voice_stt", "voice_tts", "video"],
+            is_active=True,
+            rate_limit_rpm=9999,
+            monthly_request_cap=99999,
+        )
+
     if not x_api_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

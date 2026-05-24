@@ -82,6 +82,50 @@ async def create_inference_job(
     # Build params dict based on modality
     params = _build_params(modality, locals())
 
+    import os
+    if os.getenv("SKIP_AUTH", "").lower() == "true":
+        import uuid
+        import asyncio
+        from app.demo_state import FAKE_JOBS
+        
+        job_id = uuid.uuid4()
+        FAKE_JOBS[str(job_id)] = {"status": "processing", "modality": modality}
+        
+        async def run_modal_demo(jid: str, mod: str, p: dict):
+            try:
+                import modal
+                if mod == Modality.IMAGE.value:
+                    f = modal.Function.lookup("lenai-platform", "generate_image_modal")
+                    loop = asyncio.get_event_loop()
+                    def _run():
+                        return f.remote(
+                            prompt=p.get("prompt", "A beautiful sunset") or "A beautiful sunset",
+                            negative_prompt=p.get("negative_prompt", ""),
+                            width=int(p.get("width", 512) or 512),
+                            height=int(p.get("height", 512) or 512),
+                            steps=int(p.get("steps", 20) or 20)
+                        )
+                    base64_img = await loop.run_in_executor(None, _run)
+                    FAKE_JOBS[jid]["status"] = "completed"
+                    FAKE_JOBS[jid]["output_url"] = f"data:image/png;base64,{base64_img}"
+                    FAKE_JOBS[jid]["progress"] = 100
+                else:
+                    FAKE_JOBS[jid]["status"] = "failed"
+                    FAKE_JOBS[jid]["error_message"] = "Only image generation is supported in demo mode without DB."
+            except Exception as e:
+                FAKE_JOBS[jid]["status"] = "failed"
+                FAKE_JOBS[jid]["error_message"] = str(e)
+                
+        asyncio.create_task(run_modal_demo(str(job_id), modality, params))
+        
+        return InferenceResponse(
+            job_id=job_id,
+            status="processing",
+            poll_url=f"/v1/jobs/{job_id}",
+            estimated_seconds=_estimate_time(modality),
+            message=f"{modality} job queued in demo mode",
+        )
+
     # Create and enqueue job
     service = InferenceService(db)
     job = await service.create_job(

@@ -49,6 +49,40 @@ async def query_knowledge_base(
     api_key: ApiKey = Depends(get_current_api_key),
 ):
     """Execute a RAG query against the clinical knowledge base."""
+    import os
+    if os.getenv("SKIP_AUTH", "").lower() == "true":
+        # Direct vLLM chat bypassing Qdrant (for demo)
+        import httpx
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                res = await client.post(
+                    f"{settings.VLLM_API_URL}/v1/chat/completions",
+                    json={
+                        "model": "meta-llama/Llama-3.1-8B-Instruct",
+                        "messages": [{"role": "user", "content": request.question}],
+                        "max_tokens": 1024,
+                    }
+                )
+                res.raise_for_status()
+                answer = res.json()["choices"][0]["message"]["content"]
+            return RAGQueryResponse(
+                question=request.question,
+                answer=answer,
+                sources=[],
+                confidence=1.0,
+                model_used="meta-llama/Llama-3.1-8B-Instruct (Direct Mode)",
+                cached=False
+            )
+        except Exception as e:
+            return RAGQueryResponse(
+                question=request.question,
+                answer=f"Error connecting to vLLM: {str(e)}",
+                sources=[],
+                confidence=0.0,
+                model_used="error",
+                cached=False
+            )
+
     from app.services.rag.pipeline import RAGPipeline
 
     pipeline = RAGPipeline()

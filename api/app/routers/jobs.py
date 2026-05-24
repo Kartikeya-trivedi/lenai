@@ -32,6 +32,23 @@ async def get_job(
     api_key: ApiKey = Depends(get_current_api_key),
 ):
     """Get the current status of an inference job."""
+    import os
+    if os.getenv("SKIP_AUTH", "").lower() == "true":
+        from app.demo_state import FAKE_JOBS
+        from datetime import datetime, timezone
+        if str(job_id) in FAKE_JOBS:
+            data = FAKE_JOBS[str(job_id)]
+            return JobResponse(
+                id=job_id,
+                status=data["status"],
+                modality=data["modality"],
+                output_url=data.get("output_url"),
+                error_message=data.get("error_message"),
+                progress=data.get("progress", 0),
+                created_at=datetime.now(timezone.utc),
+                tenant_id=uuid.uuid4()
+            )
+
     service = JobService(db)
     job = await service.get_job(job_id, api_key.tenant_id)
 
