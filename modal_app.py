@@ -49,13 +49,14 @@ def download_whisper_weights():
 # Image for the GPU Inference workers
 inference_image = (
     modal.Image.debian_slim(python_version="3.11")
+    .pip_install("pip>=24.0") # Upgrade pip to handle new wheels
     .pip_install(
-        "torch==2.1.2",
-        "diffusers==0.25.0",
-        "transformers==4.36.2",
-        "accelerate==0.25.0",
-        "openai-whisper==20231117",
-        "ffmpeg-python==0.2.0"
+        "torch",
+        "diffusers",
+        "transformers",
+        "accelerate",
+        "openai-whisper",
+        "ffmpeg-python"
     )
     .apt_install("ffmpeg")
     .run_function(download_sd_weights, volumes={CACHE_DIR: model_volume})
