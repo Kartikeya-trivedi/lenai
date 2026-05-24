@@ -141,13 +141,16 @@ def generate_image_modal(prompt: str, negative_prompt: str = "", width: int = 51
 def vllm_server():
     """Starts the vLLM OpenAI-compatible server on port 8000."""
     import subprocess
+    import os
     cmd = [
         "python", "-m", "vllm.entrypoints.openai.api_server",
         "--model", "/models/llama-3.1-8b-instruct",
         "--max-model-len", "8192",  # Restrict from default 131k to avoid OOM and 5-min startup profiling
         "--port", "8000"
     ]
-    subprocess.Popen(cmd)
+    env = os.environ.copy()
+    env["VLLM_USE_FLASHINFER_SAMPLER"] = "0"  # Prevent flashinfer from trying to JIT compile without nvcc
+    subprocess.Popen(cmd, env=env)
 
 
 # ---------------------------------------------------------------------------
