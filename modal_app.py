@@ -109,7 +109,7 @@ def generate_image_modal(prompt: str, negative_prompt: str = "", width: int = 51
         requires_safety_checker=False,
     ).to("cuda")
     
-    pipe.enable_xformers_memory_efficient_attention()
+    # pipe.enable_xformers_memory_efficient_attention()  # Requires xformers to be installed
     
     result = pipe(
         prompt=prompt,
