@@ -103,15 +103,21 @@ async def create_inference_job(
                         height=int(p.get("height", 512) or 512),
                         steps=int(p.get("steps", 20) or 20)
                     )
-                    FAKE_JOBS[jid]["status"] = "completed"
-                    FAKE_JOBS[jid]["output_url"] = f"data:image/png;base64,{base64_img}"
-                    FAKE_JOBS[jid]["progress"] = 100
+                    job_data = FAKE_JOBS[jid] or {}
+                    job_data["status"] = "completed"
+                    job_data["output_url"] = f"data:image/png;base64,{base64_img}"
+                    job_data["progress"] = 100
+                    FAKE_JOBS[jid] = job_data
                 else:
-                    FAKE_JOBS[jid]["status"] = "failed"
-                    FAKE_JOBS[jid]["error_message"] = "Only image generation is supported in demo mode without DB."
+                    job_data = FAKE_JOBS[jid] or {}
+                    job_data["status"] = "failed"
+                    job_data["error_message"] = "Only image generation is supported in demo mode without DB."
+                    FAKE_JOBS[jid] = job_data
             except Exception as e:
-                FAKE_JOBS[jid]["status"] = "failed"
-                FAKE_JOBS[jid]["error_message"] = str(e)
+                job_data = FAKE_JOBS[jid] or {}
+                job_data["status"] = "failed"
+                job_data["error_message"] = str(e)
+                FAKE_JOBS[jid] = job_data
                 
         asyncio.create_task(run_modal_demo(str(job_id), modality, params))
         

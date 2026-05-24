@@ -7,7 +7,7 @@ class DemoState:
     def __getitem__(self, key):
         import modal
         try:
-            d = modal.Dict.lookup("lenai-demo-state", create_if_missing=True)
+            d = modal.Dict.from_name("lenai-demo-state", create_if_missing=True)
             return d.get(key)
         except Exception:
             return None
@@ -15,7 +15,7 @@ class DemoState:
     def __setitem__(self, key, value):
         import modal
         try:
-            d = modal.Dict.lookup("lenai-demo-state", create_if_missing=True)
+            d = modal.Dict.from_name("lenai-demo-state", create_if_missing=True)
             d[key] = value
         except Exception:
             pass
