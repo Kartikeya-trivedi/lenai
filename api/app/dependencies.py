@@ -44,17 +44,21 @@ async def get_current_api_key(
     # Allow bypassing auth for serverless deployments without a DB
     if os.getenv("SKIP_AUTH", "").lower() == "true":
         # Return a mock ApiKey-like object with full access
-        from types import SimpleNamespace
-        return SimpleNamespace(
-            id=uuid.uuid4(),
-            tenant_id=uuid.uuid4(),
-            key_prefix="demo_key",
-            name="demo",
-            scopes=["image", "voice_stt", "voice_tts", "video"],
-            is_active=True,
-            rate_limit_rpm=9999,
-            monthly_request_cap=99999,
-        )
+        class MockKey:
+            def __init__(self):
+                self.id = uuid.uuid4()
+                self.tenant_id = uuid.uuid4()
+                self.key_prefix = "demo_key"
+                self.name = "demo"
+                self.scopes = ["image", "voice_stt", "voice_tts", "video"]
+                self.is_active = True
+                self.rate_limit_rpm = 9999
+                self.monthly_request_cap = 99999
+            
+            def has_scope(self, scope: str) -> bool:
+                return True
+                
+        return MockKey()
 
     if not x_api_key:
         raise HTTPException(
