@@ -174,6 +174,7 @@ def api_gateway():
     os.environ["EMBEDDING_MODEL"] = "/models/multilingual-e5-large"
     os.environ["RERANKER_MODEL"] = "/models/ms-marco-MiniLM-L-6-v2"
     os.environ["SKIP_AUTH"] = "true"  # Bypass API key validation (no DB)
+    os.environ["CORS_ORIGINS"] = '["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000"]'
     
     from app.main import app as fastapi_app
     from fastapi.staticfiles import StaticFiles
