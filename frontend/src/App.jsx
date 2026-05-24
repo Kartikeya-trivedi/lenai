@@ -4,14 +4,7 @@ import MessageBubble from './components/MessageBubble';
 import OmniInput from './components/OmniInput';
 
 function App() {
-  const [messages, setMessages] = useState([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: "Welcome to LenAI Omni. I can chat with you, generate images, convert text-to-speech, or animate videos. How can I help you today?",
-      status: 'completed'
-    }
-  ]);
+  const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const feedRef = useRef(null);
 
