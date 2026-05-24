@@ -138,9 +138,9 @@ def generate_image_modal(prompt: str, negative_prompt: str = "", width: int = 51
     image=vllm_image,
     gpu="A10G", # 24GB VRAM (perfect for Llama 3.1 8B fp16)
     volumes={"/models": rag_models_volume},
-    allow_concurrent_inputs=100,
     scaledown_window=300, # Keep the LLM warm for 5 minutes
 )
+@modal.concurrent(max_inputs=100)
 @modal.web_server(8000, startup_timeout=300)
 def vllm_server():
     """Starts the vLLM OpenAI-compatible server on port 8000."""
