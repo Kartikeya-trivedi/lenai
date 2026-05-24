@@ -65,7 +65,7 @@ inference_image = (
 # Image for the vLLM OpenAI-compatible server
 vllm_image = (
     modal.Image.debian_slim(python_version="3.11")
-    .pip_install("vllm==0.5.4") # Pinned for stability
+    .pip_install("vllm") # Use latest to resolve transformers/torch version mismatches
 )
 
 # Ignore patterns for local dir mounting (no file reading - runs inside container too)

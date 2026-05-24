@@ -48,13 +48,17 @@ async def lifespan(app: FastAPI):
     model_count = len(registry.get_all_models())
     logger.info("model_registry_loaded", model_count=model_count)
 
-    # Ensure MinIO buckets exist
-    try:
-        storage = get_storage()
-        storage.ensure_buckets()
-        logger.info("minio_buckets_ready")
-    except Exception as exc:
-        logger.warning("minio_init_failed", error=str(exc))
+    # Ensure MinIO buckets exist (skip in serverless demo mode)
+    import os
+    if os.getenv("SKIP_AUTH", "").lower() != "true":
+        try:
+            storage = get_storage()
+            storage.ensure_buckets()
+            logger.info("minio_buckets_ready")
+        except Exception as exc:
+            logger.warning("minio_init_failed", error=str(exc))
+    else:
+        logger.info("minio_init_skipped_demo_mode")
 
     logger.info("startup_complete")
 
