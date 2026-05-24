@@ -21,7 +21,6 @@ export const ApiClient = {
   },
 
   async generateImage(prompt) {
-    // 1. Submit the job
     const res = await api.post('/v1/infer/image', {
       prompt,
       negative_prompt: 'blurry, low quality',
@@ -29,10 +28,19 @@ export const ApiClient = {
       height: 512,
       steps: 20
     });
-    
-    const jobId = res.data.job_id;
-    
-    // 2. Poll until completed
+    return this.pollJob(res.data.job_id);
+  },
+
+  async generateVoice(text) {
+    const res = await api.post('/v1/infer/voice_tts', {
+      text,
+      voice: 'af_bella',
+      speed: 1.0
+    });
+    return this.pollJob(res.data.job_id);
+  },
+
+  async pollJob(jobId) {
     return new Promise((resolve, reject) => {
       const poll = async () => {
         try {
@@ -44,13 +52,13 @@ export const ApiClient = {
           } else if (status === 'failed' || status === 'dead_letter') {
             reject(new Error(statusRes.data.error_message || 'Job failed'));
           } else {
-            setTimeout(poll, 1500); // poll every 1.5s
+            setTimeout(poll, 1500);
           }
         } catch (err) {
           reject(err);
         }
       };
-      setTimeout(poll, 1000); // initial delay 1s
+      setTimeout(poll, 1000);
     });
   }
 };

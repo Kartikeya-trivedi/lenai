@@ -12,15 +12,29 @@
   }
 }
 
+@layer utilities {
+  .animate-gradient-x {
+    animation: gradient-x 3s ease infinite;
+    background-size: 200% 200%;
+  }
+  @keyframes gradient-x {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+  .animate-pulse-slow {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}
+
 .glass-panel {
-  @apply bg-panel backdrop-blur-xl border border-border shadow-2xl;
+  @apply bg-panel backdrop-blur-2xl border border-border shadow-[0_8px_32px_rgba(0,0,0,0.3)] transition-all duration-300;
 }
 
 .glass-input {
-  @apply bg-black/20 border border-border text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all;
+  @apply bg-black/40 border border-border text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all duration-300;
 }
 
-/* Custom Scrollbar */
+/* Custom Scrollbar - Hidden until hover for clean UI */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -29,9 +43,21 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: transparent;
   border-radius: 10px;
+  transition: background 0.3s;
+}
+*:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Markdown overrides for syntax highlighter seamless integration */
+.prose pre {
+  @apply !bg-transparent !p-0 !m-0;
+}
+.prose code::before, .prose code::after {
+  content: none !important;
 }
