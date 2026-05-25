@@ -156,6 +156,8 @@ curl -X POST http://localhost/v1/api-keys \
   -d '{"name": "test-key", "scopes": ["image", "voice_stt", "voice_tts"]}'
 ```
 
+**Tip:** For frontend local development, you can set `VITE_API_KEY=YOUR_KEY_HERE` in your environment (e.g. `.env` file in the frontend folder) to auto-authenticate and skip the login screen.
+
 ### 5. Submit an inference request
 ```bash
 curl -X POST http://localhost/v1/infer/image \
