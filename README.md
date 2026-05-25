@@ -96,17 +96,25 @@ Smaller models (8B) are faster and cheaper but hallucinate more on edge cases. W
 
 ## Cloud Deployment (Modal + Supabase)
 
-While the default setup runs locally via Docker Compose, LenAI is designed to be instantly deployable to the cloud using **Modal** for serverless GPU inference and **Supabase** for managed PostgreSQL.
+While the default setup runs locally via Docker Compose, LenAI is designed to be instantly deployable to the cloud using **Modal** for serverless GPU inference and **Supabase** for managed PostgreSQL and S3 Object Storage.
 
-1. **Supabase Database:** Set up a Supabase project and get the **Transaction Pooler** URL (port 6543). See [`supabase_setup.md`](supabase_setup.md) for details.
-2. **Modal Secrets:** Save the Supabase connection string (`postgresql+asyncpg://...`) as a Modal Secret named `lenai-db-secret`.
-3. **Deploy:** Run the Modal deployment script, which dynamically builds container images, downloads model weights (SD v1.5, Whisper) into a cached Modal Volume, and deploys the FastAPI gateway:
+1. **Supabase Database & Storage:** 
+   - Set up a Supabase project and get the Transaction Pooler URL.
+   - Create S3 Storage credentials in Supabase. The platform will automatically provision the required `inputs` and `outputs` buckets on startup.
+2. **Modal Secrets:** 
+   - Save the Supabase connection string as `lenai-db-secret`.
+   - Save the Supabase S3 credentials as `lenai-storage-secret`.
+   - Save a Redis connection string as `redis-secret`.
+3. **Deploy:** 
    ```bash
    pip install modal
    modal deploy modal_app.py
    ```
 
-**Cloud LLM & RAG Support:** The Modal script is configured to spin up an **A10G GPU** on-demand to run an enterprise-grade `vLLM` server serving `Llama 3.1 8B`. It automatically mounts the `ktgpt-rag-models` volume to instantly load your cached LLM, embedding, and reranker weights without redownloading them.
+**Cloud Architecture Highlights:**
+- **Persistent Celery Worker:** A lightweight CPU container (`celery_worker_modal`) stays warm 24/7 on Modal, polling your Redis queue. This maintains the robust distributed queue architecture even in the cloud.
+- **Serverless GPUs:** When the Celery worker picks up a job, it proxies the heavy lifting to A10G Serverless containers (Stable Diffusion, Whisper, Kokoro, vLLM) that scale to zero when idle.
+- **RAG Volume Caching:** Embedding models are proactively downloaded into a Modal Volume during deployment, ensuring instant document ingestion.
 
 ---
 

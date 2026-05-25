@@ -149,10 +149,17 @@ def generate_image(self, job_id: str):
     try:
         _update_job_status(job_id, "processing", progress=20)
 
-        if settings.MODAL_TOKEN_ID and settings.MODAL_TOKEN_SECRET:
-            import modal
-            logger.info("triggering_modal_function", function="generate_image_modal")
-            f = modal.Function.from_name("lenai-platform", "generate_image_modal")
+        import os
+        if os.getenv("RUNNING_IN_MODAL") == "true":
+            try:
+                import sys
+                if "/root" not in sys.path:
+                    sys.path.append("/root")
+                import modal_app
+                f = modal_app.generate_image_modal
+            except ImportError:
+                import modal
+                f = modal.Function.from_name("lenai-platform", "generate_image_modal")
             base64_img = f.remote(
                 prompt=params.get("prompt", ""),
                 negative_prompt=params.get("negative_prompt", ""),

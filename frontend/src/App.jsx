@@ -2,15 +2,17 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ApiClient } from './ApiClient';
 import MessageBubble from './components/MessageBubble';
 import OmniInput from './components/OmniInput';
+import Dashboard from './components/Dashboard';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, FileText, Upload } from 'lucide-react';
+import { Sparkles, Key, Terminal, LayoutDashboard } from 'lucide-react';
 
 function App() {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('lenai_api_key') || '');
+  const [isAuthenticated, setIsAuthenticated] = useState(() => !!localStorage.getItem('lenai_api_key'));
+  const [activeTab, setActiveTab] = useState('playground'); // 'playground' | 'dashboard'
   const feedRef = useRef(null);
-  const fileInputRef = useRef(null);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -22,29 +24,107 @@ function App() {
     }
   }, [messages]);
 
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
+  if (!isAuthenticated) {
+    return (
+      <div className="flex flex-col h-screen bg-background items-center justify-center p-4">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-md w-full bg-panel p-8 rounded-3xl border border-border shadow-2xl flex flex-col items-center text-center"
+        >
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-600/20 border border-indigo-500/30 flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(99,102,241,0.15)]">
+            <Sparkles size={32} className="text-indigo-400" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">Welcome to LenAI</h2>
+          <p className="text-slate-400 text-sm mb-8">Enter your API key to access the media inference platform.</p>
+          
+          <form 
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (apiKey.trim()) {
+                localStorage.setItem('lenai_api_key', apiKey.trim());
+                setIsAuthenticated(true);
+              }
+            }}
+            className="w-full"
+          >
+            <input 
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="lenai_sk_..."
+              className="w-full bg-[#1e1e1e] border border-border rounded-xl px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 mb-4 transition-colors"
+              autoFocus
+            />
+            <button 
+              type="submit"
+              disabled={!apiKey.trim()}
+              className="w-full bg-white text-black font-semibold rounded-xl py-3 hover:bg-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Connect
+            </button>
+          </form>
+        </motion.div>
+      </div>
+    );
+  }
+
+  const handleFileUpload = async (file, isAudio = false) => {
     if (!file) return;
 
-    setIsUploading(true);
-    try {
-      const text = await file.text();
-      const res = await ApiClient.ingestDocument(text, file.name);
-      
-      const botMsgId = Date.now().toString();
+    const botMsgId = Date.now().toString() + "_upload";
+    
+    if (isAudio) {
       setMessages(prev => [...prev, { 
         id: botMsgId, 
         role: 'assistant', 
-        content: `Successfully ingested document: **${file.name}** (${res.chunks} chunks embedded and stored in Qdrant!)`, 
+        content: `Transcribing audio file: **${file.name}**...`, 
         modality: 'chat',
-        status: 'completed' 
+        status: 'processing' 
       }]);
-    } catch (err) {
-      console.error(err);
-      alert(`Failed to upload document: ${err.message}`);
-    } finally {
-      setIsUploading(false);
-      e.target.value = null; // reset input
+
+      try {
+        const response = await ApiClient.transcribeAudio(file);
+        
+        // Wait for the job to complete or use the result if immediate
+        // In transcribeAudio, it returns the job status object
+        // The transcript text is usually stored in the output url, or directly in the completed job metadata depending on backend implementation.
+        // Assuming the backend stores transcript URL in response.output_url
+        setMessages(prev => prev.map(msg => 
+          msg.id === botMsgId ? { 
+            ...msg, 
+            content: `Transcription complete! [View Transcript JSON](${response.output_url})`, 
+            status: 'completed' 
+          } : msg
+        ));
+      } catch (err) {
+        console.error(err);
+        setMessages(prev => prev.map(msg => 
+          msg.id === botMsgId ? { ...msg, content: `Failed to transcribe audio: ${err.message}`, status: 'failed' } : msg
+        ));
+      }
+    } else {
+      setMessages(prev => [...prev, { 
+        id: botMsgId, 
+        role: 'assistant', 
+        content: `Uploading document: **${file.name}**...`, 
+        modality: 'chat',
+        status: 'processing' 
+      }]);
+
+      try {
+        const text = await file.text();
+        const res = await ApiClient.ingestDocument(text, file.name);
+        
+        setMessages(prev => prev.map(msg => 
+          msg.id === botMsgId ? { ...msg, content: `Successfully ingested document: **${file.name}** (${res.chunks} chunks embedded and stored in Qdrant!)`, status: 'completed' } : msg
+        ));
+      } catch (err) {
+        console.error(err);
+        setMessages(prev => prev.map(msg => 
+          msg.id === botMsgId ? { ...msg, content: `Failed to upload document: ${err.message}`, status: 'failed' } : msg
+        ));
+      }
     }
   };
 
@@ -66,7 +146,8 @@ function App() {
     setIsLoading(true);
 
     try {
-      if (modality === 'text' || modality === 'chat') {
+      if (modality === 'text' || modality === 'chat' || modality === 'search') {
+        // If web search or deep research, could pass specific flags. For now, text handles it.
         const response = await ApiClient.chat(text);
         setMessages(prev => prev.map(msg => 
           msg.id === botMsgId ? { ...msg, content: response.answer, status: 'completed' } : msg
@@ -92,11 +173,10 @@ function App() {
           } : msg
         ));
       } else {
-        // Fallback for video not fully implemented yet
         setMessages(prev => prev.map(msg => 
           msg.id === botMsgId ? { 
             ...msg, 
-            content: `The ${modality} modality is currently under construction. Please try Chat, Image, or Voice.`, 
+            content: `The ${modality} modality is currently under construction.`, 
             status: 'completed' 
           } : msg
         ));
@@ -111,87 +191,101 @@ function App() {
     }
   };
 
+  const isEmpty = messages.length === 0;
+
   return (
-    <div className="flex flex-col h-screen bg-background relative overflow-hidden">
-      {/* Background ambient lighting */}
-      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
-      <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-purple-600/10 rounded-full blur-[150px] pointer-events-none"></div>
-
-      {/* Header */}
-      <header className="h-16 flex-shrink-0 flex items-center px-6 border-b border-border/50 bg-background/50 backdrop-blur-xl z-20">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-            <Sparkles size={16} className="text-white" />
+    <div className="flex h-screen bg-background font-sans overflow-hidden">
+      
+      {/* Sidebar Navigation */}
+      <div className="w-64 border-r border-border bg-panel flex flex-col p-4">
+        <div className="flex items-center gap-3 mb-8 px-2">
+          <div className="w-8 h-8 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
+            <Sparkles size={18} className="text-indigo-400" />
           </div>
-          <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400 tracking-tight">
-            LenAI Omni
-          </h1>
+          <span className="font-bold text-white text-lg tracking-wide">LenAI</span>
         </div>
-        <div className="ml-auto flex items-center gap-4">
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            onChange={handleFileUpload} 
-            accept=".txt,.md,.csv" 
-            className="hidden" 
-          />
+        
+        <nav className="flex flex-col gap-2">
           <button 
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            className="flex items-center gap-2 glass-panel hover:bg-white/10 transition-colors px-4 py-1.5 rounded-full text-sm font-medium text-slate-300 disabled:opacity-50"
+            onClick={() => setActiveTab('playground')}
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${activeTab === 'playground' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}
           >
-            {isUploading ? <Upload size={14} className="animate-bounce" /> : <FileText size={14} />}
-            <span>{isUploading ? 'Ingesting...' : 'Add Document'}</span>
+            <Terminal size={18} /> Playground
           </button>
-          
-          <div className="flex items-center gap-3 glass-panel px-3 py-1.5 rounded-full">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse-slow shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
-            <span className="text-xs text-emerald-400 font-semibold tracking-widest uppercase">Systems Online</span>
-          </div>
-        </div>
-      </header>
+          <button 
+            onClick={() => setActiveTab('dashboard')}
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${activeTab === 'dashboard' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}
+          >
+            <LayoutDashboard size={18} /> Dashboard
+          </button>
+        </nav>
 
-      {/* Chat Feed */}
-      <main 
-        ref={feedRef}
-        className="flex-1 overflow-y-auto p-4 md:p-8 flex flex-col gap-2 pb-40 z-10 scroll-smooth"
-      >
-        <div className="max-w-4xl w-full mx-auto relative min-h-full flex flex-col">
-          {messages.length === 0 ? (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-              className="flex-1 flex flex-col items-center justify-center text-center pb-48"
-            >
-              <div className="w-20 h-20 mb-6 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-600/20 border border-indigo-500/30 flex items-center justify-center shadow-[0_0_50px_rgba(99,102,241,0.15)]">
-                <Sparkles size={40} className="text-indigo-400" />
-              </div>
-              <h2 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight">
-                Welcome to <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-emerald-400 animate-gradient-x">LenAI</span>
-              </h2>
-              <p className="text-slate-400 text-lg max-w-xl font-medium leading-relaxed">
-                Experience the next generation of multimodal AI. Generate text, images, and voice all in one unified seamless interface.
-              </p>
-            </motion.div>
-          ) : (
-            <>
-              <AnimatePresence initial={false}>
-                {messages.map(msg => (
-                  <MessageBubble key={msg.id} {...msg} />
-                ))}
-              </AnimatePresence>
-              {/* Spacer to clear the absolute-positioned input area */}
-              <div className="h-56 flex-shrink-0 w-full" />
-            </>
-          )}
+        <div className="mt-auto pt-4 border-t border-border px-2">
+          <button 
+            onClick={() => {
+              localStorage.removeItem('lenai_api_key');
+              setIsAuthenticated(false);
+            }}
+            className="flex items-center gap-2 text-xs text-rose-400 hover:text-rose-300 font-medium"
+          >
+            Sign Out
+          </button>
         </div>
-      </main>
-
-      {/* Input Area */}
-      <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6 bg-gradient-to-t from-background via-background/95 to-transparent pt-20 z-20">
-        <OmniInput onSubmit={handleSubmit} isLoading={isLoading} />
       </div>
+
+      {/* Main Content Area */}
+      {activeTab === 'dashboard' ? (
+        <Dashboard />
+      ) : (
+        <div className="flex-1 flex flex-col h-full items-center relative overflow-hidden">
+          <AnimatePresence>
+            {messages.length === 0 ? (
+              <motion.div 
+                key="empty"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20, filter: 'blur(10px)' }}
+                className="flex-1 flex flex-col items-center justify-center w-full max-w-3xl px-6 pb-32"
+              >
+                <h1 className="text-[32px] font-semibold text-slate-100 mb-8 tracking-tight">
+                  What are you working on?
+                </h1>
+                
+                <div className="w-full relative z-10">
+                  <OmniInput onSubmit={handleSubmit} onFileUpload={handleFileUpload} isLoading={isLoading} centered={true} />
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div 
+                key="chat"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="w-full flex-1 flex flex-col items-center overflow-hidden"
+              >
+                {/* Chat Feed */}
+                <div 
+                  ref={feedRef}
+                  className="w-full flex-1 overflow-y-auto scroll-smooth py-8 px-4"
+                >
+                  <div className="max-w-3xl mx-auto flex flex-col gap-6">
+                    {messages.map(msg => (
+                      <MessageBubble key={msg.id} {...msg} />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Bottom Input Area */}
+                <div className="w-full max-w-3xl px-6 pb-6 pt-2 bg-gradient-to-t from-background via-background to-transparent relative z-10">
+                  <OmniInput onSubmit={handleSubmit} onFileUpload={handleFileUpload} isLoading={isLoading} centered={false} />
+                  <div className="text-center mt-3 text-[11px] text-slate-500 font-medium">
+                    LenAI can generate images, voice, video, and text.
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
     </div>
   );
 }

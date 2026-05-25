@@ -27,8 +27,9 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Python deps
-RUN pip install --no-cache-dir \
-    torch==2.4.1 --index-url https://download.pytorch.org/whl/cpu && \
+ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir --default-timeout=100 \
+    torch torchvision --index-url ${TORCH_INDEX_URL} && \
     pip install --no-cache-dir \
     diffusers[torch]>=0.27.0 \
     transformers>=4.38.0 \

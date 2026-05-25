@@ -104,12 +104,16 @@ class RAGPipeline:
         retrieval_ms = round((time.monotonic() - retrieval_start) * 1000)
 
         if not candidates:
+            # Fallback to general AI knowledge
+            answer = await self._generate(
+                question, "", model="small", max_tokens=1024, require_context=False
+            )
             return {
-                "answer": "No relevant information found in the knowledge base.",
-                "confidence": 0.0,
-                "model_used": "none",
+                "answer": answer,
+                "confidence": 1.0,
+                "model_used": settings.LLM_MODEL,
                 "sources": [],
-                "retrieval_stats": {"candidates": 0, "retrieval_ms": retrieval_ms},
+                "retrieval_stats": {"candidates": 0, "reranked": 0, "retrieval_ms": retrieval_ms, "rerank_ms": 0, "total_ms": round((time.monotonic() - start) * 1000)},
                 "cached": False,
             }
 
@@ -138,13 +142,11 @@ class RAGPipeline:
         ]
 
         if confidence < settings.RAG_CONFIDENCE_THRESHOLD:
-            # Below threshold — no confident answer possible
-            answer = (
-                "I found some potentially related information, but I'm not confident "
-                "enough to provide a reliable answer. Please consult a medical "
-                "professional for this query."
+            # Below threshold — fallback to general knowledge
+            answer = await self._generate(
+                question, "", model="small", max_tokens=1024, require_context=False
             )
-            model_used = "none (below confidence threshold)"
+            model_used = settings.LLM_MODEL
         elif confidence < 0.7:
             # Medium confidence → use big model for better reasoning
             answer = await self._generate(
@@ -240,6 +242,7 @@ class RAGPipeline:
         context: str,
         model: str = "small",
         max_tokens: int = 512,
+        require_context: bool = True,
     ) -> str:
         """
         Generate answer using vLLM-compatible API.
@@ -251,22 +254,29 @@ class RAGPipeline:
         else:
             model_name = settings.LLM_MODEL
 
-        system_prompt = (
-            "You are a clinical assistant. Answer the question using ONLY the "
-            "provided context. If the context doesn't contain enough information "
-            "to answer, say so. Be precise and cite your sources. "
-            "Do not fabricate information."
-        )
+        if require_context and context:
+            system_prompt = (
+                "You are a helpful AI assistant. Use the provided context to answer the user's question if relevant. "
+                "If the context doesn't contain the exact answer, use your general knowledge to help the user. "
+                "Be conversational and friendly."
+            )
+            content = (
+                f"Context:\n{context}\n\n"
+                f"Question: {question}\n\n"
+                f"Answer:"
+            )
+        else:
+            system_prompt = (
+                "You are a highly capable AI assistant like ChatGPT. Answer the user's question "
+                "based on your general knowledge in a friendly, conversational tone."
+            )
+            content = f"Question: {question}\n\nAnswer:"
 
         messages = [
             {"role": "system", "content": system_prompt},
             {
                 "role": "user",
-                "content": (
-                    f"Context:\n{context}\n\n"
-                    f"Question: {question}\n\n"
-                    f"Answer based only on the context above:"
-                ),
+                "content": content,
             },
         ]
 

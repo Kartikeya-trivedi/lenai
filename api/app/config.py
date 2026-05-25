@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     MINIO_ROOT_PASSWORD: str = "minioadmin"
     MINIO_ENDPOINT: str = "minio:9000"
     MINIO_PUBLIC_ENDPOINT: str = "localhost:9000"
+    MINIO_REGION: str = "us-east-1"
     MINIO_USE_SSL: bool = False
     MINIO_BUCKET_INPUTS: str = "inputs"
     MINIO_BUCKET_OUTPUTS: str = "outputs"
@@ -76,6 +77,7 @@ class Settings(BaseSettings):
 
     # ── RAG Pipeline ────────────────────────────────────────────
     QDRANT_URL: str = "http://qdrant:6333"
+    QDRANT_API_KEY: Optional[str] = None
     EMBEDDING_MODEL: str = "intfloat/multilingual-e5-large"
     RERANKER_MODEL: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     LLM_MODEL: str = "meta-llama/Llama-3.1-8B-Instruct"

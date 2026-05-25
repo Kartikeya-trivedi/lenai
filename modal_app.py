@@ -23,6 +23,35 @@ rag_models_volume = modal.Volume.from_name("ktgpt-rag-models")
 # ---------------------------------------------------------------------------
 # Container Image Definitions
 # ---------------------------------------------------------------------------
+def download_kokoro_models():
+    import os
+    import sys
+    import urllib.request
+    import subprocess
+    
+    print("Downloading Kokoro models to volume...")
+    
+    # 1. Main .pth file
+    os.makedirs(f"{CACHE_DIR}/kokoro", exist_ok=True)
+    model_path = f"{CACHE_DIR}/kokoro/kokoro-v1_0.pth"
+    if not os.path.exists(model_path):
+        urllib.request.urlretrieve("https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/kokoro-v1_0.pth", model_path)
+    
+    # 2. Voice profiles via huggingface_hub cache
+    os.environ["HF_HOME"] = CACHE_DIR
+    from huggingface_hub import hf_hub_download
+    hf_hub_download(repo_id="hexgrad/Kokoro-82M", filename="voices/af_bella.pt")
+    
+    # 3. Spacy english pipeline (installed into volume)
+    spacy_dir = f"{CACHE_DIR}/spacy_models"
+    os.makedirs(spacy_dir, exist_ok=True)
+    subprocess.check_call([
+        sys.executable, "-m", "pip", "install", 
+        "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl", 
+        "--target", spacy_dir
+    ])
+    print("Kokoro models downloaded.")
+
 def download_sd_weights():
     from diffusers import DiffusionPipeline, AutoPipelineForImage2Image
     import torch
@@ -76,6 +105,7 @@ inference_image = (
     .apt_install("ffmpeg")
     .run_function(download_sd_weights, volumes={CACHE_DIR: model_volume})
     .run_function(download_whisper_weights, volumes={CACHE_DIR: model_volume})
+    .run_function(download_kokoro_models, volumes={CACHE_DIR: model_volume})
 )
 
 # Image for the vLLM OpenAI-compatible server
@@ -96,6 +126,7 @@ api_image = (
     .pip_install("aiofiles")
     .run_function(download_rag_models, volumes={CACHE_DIR: rag_models_volume})
     .add_local_dir("./api/app", remote_path="/root/app", ignore=ignore_patterns)
+    .add_local_file("./api/model_registry.yaml", remote_path="/root/model_registry.yaml")
     .add_local_dir("./playground", remote_path="/root/playground")
 )
 
@@ -107,6 +138,7 @@ api_image = (
     gpu="A10G",
     volumes={CACHE_DIR: model_volume},
     scaledown_window=120,
+    keep_warm=1,
 )
 def generate_image_modal(prompt: str, negative_prompt: str = "", width: int = 512, height: int = 512, steps: int = 20):
     from diffusers import DiffusionPipeline
@@ -137,6 +169,7 @@ def generate_image_modal(prompt: str, negative_prompt: str = "", width: int = 51
     gpu="A10G",
     volumes={CACHE_DIR: model_volume},
     scaledown_window=60,
+    keep_warm=1,
 )
 def transcribe_audio_modal(audio_bytes: bytes, language: str = None):
     import whisper
@@ -159,19 +192,19 @@ def transcribe_audio_modal(audio_bytes: bytes, language: str = None):
     gpu="A10G",
     volumes={CACHE_DIR: model_volume},
     scaledown_window=60,
+    keep_warm=1,
 )
 def synthesize_speech_modal(text: str, voice: str = "af_bella", speed: float = 1.0):
-    import urllib.request
     import os
+    import sys
+    
+    # Load spacy models from the persistent volume
+    sys.path.insert(0, f"{CACHE_DIR}/spacy_models")
+    os.environ["HF_HOME"] = CACHE_DIR
+    
     import soundfile as sf
     import io
     from kokoro import KPipeline
-    
-    # Download Kokoro weights on the fly if missing
-    os.makedirs(f"{CACHE_DIR}/kokoro", exist_ok=True)
-    model_path = f"{CACHE_DIR}/kokoro/kokoro-v1_0.pth"
-    if not os.path.exists(model_path):
-        urllib.request.urlretrieve("https://github.com/hexgrad/kokoro/releases/download/v1.0/kokoro-v1_0.pth", model_path)
     
     pipeline = KPipeline(lang_code='a')
     generator = pipeline(text, voice=voice, speed=speed)
@@ -191,6 +224,7 @@ def synthesize_speech_modal(text: str, voice: str = "af_bella", speed: float = 1
     volumes={CACHE_DIR: model_volume},
     scaledown_window=120,
     timeout=600,
+    keep_warm=1,
 )
 def process_video_modal(
     source_data: bytes, source_ext: str, prompt: str, negative_prompt: str = "",
@@ -269,6 +303,7 @@ def process_video_modal(
     gpu="A10G",
     volumes={"/models": rag_models_volume},
     scaledown_window=300,
+    keep_warm=1,
 )
 @modal.concurrent(max_inputs=100)
 @modal.web_server(8000, startup_timeout=900)
@@ -302,6 +337,7 @@ def vllm_server():
 @modal.asgi_app()
 def api_gateway():
     import os
+    os.environ["RUNNING_IN_MODAL"] = "true"
     
     # 1. Inject internal vLLM URL
     os.environ["VLLM_API_URL"] = vllm_server.web_url.url if hasattr(vllm_server.web_url, 'url') else getattr(vllm_server, "get_web_url", lambda: vllm_server.web_url)()
@@ -324,27 +360,57 @@ def api_gateway():
 
 
 # ---------------------------------------------------------------------------
-# Serverless Celery Worker (Distributed Queue)
+# Serverless Celery Task Execution
 # ---------------------------------------------------------------------------
 @app.function(
-    image=api_image,
     secrets=[
         modal.Secret.from_name("lenai-db-secret"),
-        modal.Secret.from_name("redis-secret"),
         modal.Secret.from_name("lenai-storage-secret"),
     ],
-    keep_warm=1, # REQUIRED: Keeps the container alive 24/7 to poll Redis
+    image=api_image,
+    timeout=600,
 )
-def celery_worker_modal():
-    """Runs a persistent Celery worker on Modal to process jobs from Redis."""
-    import subprocess
+def execute_celery_task_modal(task_name: str, job_id: str):
+    """
+    Execute a Celery task synchronously in this Modal container.
+    This replaces the need for a long-running Celery worker daemon.
+    """
     import os
+    os.environ["RUNNING_IN_MODAL"] = "true"
     
-    cmd = [
-        "celery", "-A", "app.workers.celery_app", "worker", 
-        "--loglevel=info", "-Q", "image,voice,video,webhook", 
-        "--concurrency=4"
-    ]
+    from app.workers.celery_app import celery_app
+    # Ensure tasks are registered
+    import app.workers.image_tasks
+    import app.workers.voice_tasks
+    import app.workers.video_tasks
     
-    # We must start the worker inside the /root/app directory where code was copied
-    subprocess.run(cmd, cwd="/root/app", env=os.environ.copy())
+    task = celery_app.tasks.get(task_name)
+    if not task:
+        raise ValueError(f"Task {task_name} not found")
+        
+    print(f"Executing task {task_name} for job {job_id} on Modal")
+    task.apply(args=[job_id])
+
+@app.function(
+    secrets=[
+        modal.Secret.from_name("lenai-db-secret"),
+        modal.Secret.from_name("lenai-storage-secret"),
+    ],
+    image=api_image,
+    timeout=600,
+    schedule=modal.Cron("0 * * * *")
+)
+def cleanup_outputs_cron_modal():
+    """
+    Scheduled cron job to run the TTL cleanup task directly on Modal.
+    """
+    import os
+    os.environ["RUNNING_IN_MODAL"] = "true"
+    
+    from app.workers.celery_app import celery_app
+    import app.workers.cleanup_tasks
+    
+    task = celery_app.tasks.get("workers.cleanup_tasks.cleanup_expired_outputs")
+    if task:
+        print("Executing scheduled TTL cleanup on Modal...")
+        task.apply()

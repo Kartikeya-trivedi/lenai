@@ -25,10 +25,13 @@ class QdrantClient:
 
     def __init__(self, url: Optional[str] = None) -> None:
         self.base_url = (url or settings.QDRANT_URL).rstrip("/")
+        self.headers = {}
+        if settings.QDRANT_API_KEY:
+            self.headers["api-key"] = settings.QDRANT_API_KEY
 
     async def ensure_collection(self, vector_size: int = 1024) -> None:
         """Create collection if it doesn't exist."""
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, headers=self.headers) as client:
             # Check if collection exists
             resp = await client.get(
                 f"{self.base_url}/collections/{COLLECTION_NAME}"
@@ -72,7 +75,7 @@ class QdrantClient:
                 "payload": payload,
             })
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=60.0, headers=self.headers) as client:
             resp = await client.put(
                 f"{self.base_url}/collections/{COLLECTION_NAME}/points",
                 json={"points": points},
@@ -98,7 +101,7 @@ class QdrantClient:
         if filter_conditions:
             body["filter"] = filter_conditions
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, headers=self.headers) as client:
             resp = await client.post(
                 f"{self.base_url}/collections/{COLLECTION_NAME}/points/search",
                 json=body,
@@ -120,7 +123,7 @@ class QdrantClient:
 
     async def delete_by_source(self, source: str) -> None:
         """Delete all points from a specific source document."""
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, headers=self.headers) as client:
             resp = await client.post(
                 f"{self.base_url}/collections/{COLLECTION_NAME}/points/delete",
                 json={
@@ -137,7 +140,7 @@ class QdrantClient:
 
     async def count(self) -> int:
         """Get total point count in collection."""
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, headers=self.headers) as client:
             resp = await client.get(
                 f"{self.base_url}/collections/{COLLECTION_NAME}"
             )
@@ -151,7 +154,7 @@ class QdrantClient:
 
         start = time.monotonic()
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
+            async with httpx.AsyncClient(timeout=5.0, headers=self.headers) as client:
                 resp = await client.get(f"{self.base_url}/healthz")
                 latency = (time.monotonic() - start) * 1000
                 return resp.status_code == 200, round(latency, 2)

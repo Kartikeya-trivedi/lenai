@@ -7,17 +7,24 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from sqlalchemy import BigInteger, ForeignKey, Index, Integer, String
+from sqlalchemy import BigInteger, ForeignKey, Index, Integer, String, DateTime, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from datetime import datetime
 
-from app.models.base import Base, TimestampMixin, UUIDMixin
+from app.models.base import Base, UUIDMixin
 
 
-class UsageRecord(UUIDMixin, TimestampMixin, Base):
+class UsageRecord(UUIDMixin, Base):
     __tablename__ = "usage_records"
     __table_args__ = (
         Index("ix_usage_tenant_created", "tenant_id", "created_at"),
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
     )
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(

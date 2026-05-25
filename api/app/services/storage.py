@@ -1,5 +1,5 @@
 """
-MinIO object storage service — upload, download, presigned URLs, TTL cleanup.
+boto3 object storage service — upload, download, presigned URLs, TTL cleanup.
 """
 
 from __future__ import annotations
@@ -8,8 +8,9 @@ from datetime import timedelta
 from io import BytesIO
 from typing import Optional
 
-from minio import Minio
-from minio.error import S3Error
+import boto3
+from botocore.exceptions import ClientError
+from botocore.client import Config
 
 from app.config import get_settings
 from app.utils.logging import get_logger
@@ -17,22 +18,33 @@ from app.utils.logging import get_logger
 logger = get_logger(__name__)
 settings = get_settings()
 
-
 class StorageService:
-    """Manages media file storage in MinIO (S3-compatible)."""
+    """Manages media file storage in S3-compatible storage."""
 
     def __init__(self) -> None:
-        self.client = Minio(
-            endpoint=settings.MINIO_ENDPOINT,
-            access_key=settings.MINIO_ROOT_USER,
-            secret_key=settings.MINIO_ROOT_PASSWORD,
-            secure=settings.MINIO_USE_SSL,
+        endpoint = settings.MINIO_ENDPOINT
+        # If it's a supabase URL and doesn't have http, we add it and append the path
+        if endpoint.endswith(".supabase.co"):
+            if not endpoint.startswith("http"):
+                endpoint = f"https://{endpoint}"
+            if "/storage/v1/s3" not in endpoint:
+                endpoint = f"{endpoint}/storage/v1/s3"
+        elif not endpoint.startswith("http"):
+            protocol = "https" if settings.MINIO_USE_SSL else "http"
+            endpoint = f"{protocol}://{endpoint}"
+
+        self.client = boto3.client(
+            "s3",
+            endpoint_url=endpoint,
+            aws_access_key_id=settings.MINIO_ROOT_USER,
+            aws_secret_access_key=settings.MINIO_ROOT_PASSWORD,
+            region_name=settings.MINIO_REGION,
+            config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
         )
         self.public_endpoint = settings.MINIO_PUBLIC_ENDPOINT
         self.bucket_inputs = settings.MINIO_BUCKET_INPUTS
         self.bucket_outputs = settings.MINIO_BUCKET_OUTPUTS
         
-        # Ensure Supabase S3 buckets exist on startup
         try:
             self.ensure_buckets()
         except Exception as e:
@@ -41,9 +53,13 @@ class StorageService:
     def ensure_buckets(self) -> None:
         """Create input/output buckets if they don't exist."""
         for bucket in [self.bucket_inputs, self.bucket_outputs]:
-            if not self.client.bucket_exists(bucket):
-                self.client.make_bucket(bucket)
-                logger.info("bucket_created", bucket=bucket)
+            try:
+                self.client.head_bucket(Bucket=bucket)
+            except ClientError as e:
+                error_code = e.response.get('Error', {}).get('Code')
+                if error_code == '404':
+                    self.client.create_bucket(Bucket=bucket)
+                    logger.info("bucket_created", bucket=bucket)
 
     def upload_file(
         self,
@@ -53,13 +69,11 @@ class StorageService:
         content_type: str = "application/octet-stream",
     ) -> str:
         """Upload a file and return the object key."""
-        stream = BytesIO(data)
         self.client.put_object(
-            bucket_name=bucket,
-            object_name=key,
-            data=stream,
-            length=len(data),
-            content_type=content_type,
+            Bucket=bucket,
+            Key=key,
+            Body=data,
+            ContentType=content_type,
         )
         logger.info("file_uploaded", bucket=bucket, key=key, size=len(data))
         return key
@@ -67,12 +81,9 @@ class StorageService:
     def download_file(self, bucket: str, key: str) -> bytes:
         """Download a file and return its bytes."""
         try:
-            response = self.client.get_object(bucket, key)
-            data = response.read()
-            response.close()
-            response.release_conn()
-            return data
-        except S3Error as e:
+            response = self.client.get_object(Bucket=bucket, Key=key)
+            return response['Body'].read()
+        except ClientError as e:
             logger.error("download_failed", bucket=bucket, key=key, error=str(e))
             raise
 
@@ -83,53 +94,58 @@ class StorageService:
         ttl_hours: int = 24,
     ) -> str:
         """Generate a presigned download URL with TTL."""
-        url = self.client.presigned_get_object(
-            bucket_name=bucket,
-            object_name=key,
-            expires=timedelta(hours=ttl_hours),
+        url = self.client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': bucket, 'Key': key},
+            ExpiresIn=ttl_hours * 3600
         )
-        # Replace internal endpoint with public-facing one
-        url = url.replace(settings.MINIO_ENDPOINT, self.public_endpoint)
+        # Handle MinIO local Docker networking replacement, but ignore Supabase
+        if settings.MINIO_ENDPOINT in url and settings.MINIO_PUBLIC_ENDPOINT and "supabase.co" not in settings.MINIO_ENDPOINT:
+            url = url.replace(settings.MINIO_ENDPOINT, settings.MINIO_PUBLIC_ENDPOINT)
         return url
 
     def delete_file(self, bucket: str, key: str) -> None:
         """Delete a file from storage."""
         try:
-            self.client.remove_object(bucket, key)
+            self.client.delete_object(Bucket=bucket, Key=key)
             logger.info("file_deleted", bucket=bucket, key=key)
-        except S3Error as e:
+        except ClientError as e:
             logger.error("delete_failed", bucket=bucket, key=key, error=str(e))
 
     def get_file_size(self, bucket: str, key: str) -> int:
         """Get file size in bytes."""
         try:
-            stat = self.client.stat_object(bucket, key)
-            return stat.size
-        except S3Error:
+            response = self.client.head_object(Bucket=bucket, Key=key)
+            return response['ContentLength']
+        except ClientError:
             return 0
 
     def list_objects(self, bucket: str, prefix: str = "") -> list:
         """List objects in a bucket with optional prefix."""
-        objects = self.client.list_objects(bucket, prefix=prefix)
-        return [obj for obj in objects]
+        try:
+            response = self.client.list_objects_v2(Bucket=bucket, Prefix=prefix)
+            if 'Contents' in response:
+                class Obj:
+                    def __init__(self, key):
+                        self.object_name = key
+                return [Obj(obj['Key']) for obj in response['Contents']]
+            return []
+        except ClientError:
+            return []
 
     def check_health(self) -> tuple[bool, float]:
-        """Check MinIO connectivity."""
+        """Check S3 connectivity."""
         import time
-
         start = time.monotonic()
         try:
-            self.client.bucket_exists(self.bucket_inputs)
+            self.client.head_bucket(Bucket=self.bucket_inputs)
             latency = (time.monotonic() - start) * 1000
             return True, round(latency, 2)
         except Exception:
             latency = (time.monotonic() - start) * 1000
             return False, round(latency, 2)
 
-
-# Module-level singleton
 _storage: Optional[StorageService] = None
-
 
 def get_storage() -> StorageService:
     """Get or create the storage service singleton."""

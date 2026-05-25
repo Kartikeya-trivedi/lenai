@@ -138,6 +138,7 @@ def register_error_handlers(app: FastAPI) -> None:
         return _build_error_response(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             code="INTERNAL_ERROR",
-            message="An unexpected error occurred",
+            message=str(exc),
+            details={"traceback": traceback.format_exc()},
             request_id=request_id,
         )

@@ -9,7 +9,10 @@ const api = axios.create({
 
 // Guarantee headers are injected on every request
 api.interceptors.request.use(config => {
-  config.headers['X-API-Key'] = 'lenai_sk_dummy';
+  const key = localStorage.getItem('lenai_api_key');
+  if (key) {
+    config.headers['X-API-Key'] = key;
+  }
   return config;
 });
 
@@ -38,6 +41,14 @@ export const ApiClient = {
     formData.append('speed', 1.0);
 
     const res = await api.post('/v1/infer/voice_tts', formData);
+    return this.pollJob(res.data.job_id);
+  },
+
+  async transcribeAudio(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const res = await api.post('/v1/infer/voice_stt', formData);
     return this.pollJob(res.data.job_id);
   },
 
@@ -70,5 +81,29 @@ export const ApiClient = {
       metadata: { uploaded_via: 'frontend' }
     });
     return res.data;
+  },
+
+  async getUsage(days = 30) {
+    const res = await api.get(`/v1/usage?days=${days}`);
+    return res.data;
+  },
+
+  async getApiKeys() {
+    const res = await api.get('/v1/api-keys');
+    return res.data;
+  },
+
+  async createApiKey(name) {
+    const res = await api.post('/v1/api-keys', {
+      name,
+      scopes: ['*'],
+      rate_limit_rpm: 60,
+      monthly_request_cap: 10000
+    });
+    return res.data;
+  },
+
+  async revokeApiKey(keyId) {
+    await api.delete(`/v1/api-keys/${keyId}`);
   }
 };

@@ -1,86 +1,322 @@
-import React, { useState } from 'react';
-import { Send, Image as ImageIcon, Mic, Video, Type } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { 
+  Send, 
+  Image as ImageIcon, 
+  Mic, 
+  Plus, 
+  Paperclip,
+  FileText,
+  Video,
+  AudioLines,
+  Pen
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function OmniInput({ onSubmit, isLoading }) {
+export default function OmniInput({ onSubmit, onFileUpload, isLoading, centered }) {
   const [text, setText] = useState('');
   const [modality, setModality] = useState('text'); // text, image, voice, video
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [micMenuOpen, setMicMenuOpen] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  
+  const fileInputRef = useRef(null);
+  const audioInputRef = useRef(null);
+  const menuRef = useRef(null);
+  const micMenuRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setMenuOpen(false);
+      }
+      if (micMenuRef.current && !micMenuRef.current.contains(event.target)) {
+        setMicMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const handleSubmit = (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!text.trim() || isLoading) return;
     onSubmit(text, modality);
     setText('');
+    setModality('text');
   };
 
-  const getPlaceholder = () => {
-    switch(modality) {
-      case 'image': return 'Describe the stunning image you want to generate...';
-      case 'voice': return 'Type the text you want converted to beautiful speech...';
-      case 'video': return 'Describe the video scene... (Coming soon)';
-      default: return 'Ask a question or type your message...';
+  const handleFileChange = (e, isAudio = false) => {
+    const file = e.target.files[0];
+    if (file && onFileUpload) {
+      onFileUpload(file, isAudio);
+    }
+    setMenuOpen(false);
+    e.target.value = null;
+  };
+
+  const handleActionClick = (mode) => {
+    setModality(mode);
+    setMenuOpen(false);
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioFile = new File([audioBlob], 'live_recording.webm', { type: 'audio/webm' });
+        
+        stream.getTracks().forEach(track => track.stop());
+        
+        if (onFileUpload) {
+          onFileUpload(audioFile, true);
+        }
+        setIsRecording(false);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setMicMenuOpen(false);
+    } catch (err) {
+      console.error("Error accessing microphone:", err);
+      alert("Microphone access denied or not available.");
     }
   };
 
-  return (
-    <div className="w-full max-w-4xl mx-auto p-4 md:px-8">
-      <motion.form 
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.5, ease: 'easeOut' }}
-        onSubmit={handleSubmit} 
-        className="relative glass-panel rounded-3xl p-3 flex flex-col gap-3 shadow-[0_10px_40px_rgba(0,0,0,0.5)]"
-      >
-        {/* Modality Selector */}
-        <div className="flex flex-wrap gap-2 px-3 pt-1">
-          <button type="button" onClick={() => setModality('text')} className={`px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all duration-300 ${modality === 'text' ? 'bg-indigo-500/20 text-indigo-300 shadow-[0_0_15px_rgba(99,102,241,0.2)] scale-105' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}>
-            <Type size={16} /> Chat
-          </button>
-          <button type="button" onClick={() => setModality('image')} className={`px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all duration-300 ${modality === 'image' ? 'bg-purple-500/20 text-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.2)] scale-105' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}>
-            <ImageIcon size={16} /> Image
-          </button>
-          <button type="button" onClick={() => setModality('voice')} className={`px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all duration-300 ${modality === 'voice' ? 'bg-emerald-500/20 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.2)] scale-105' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}>
-            <Mic size={16} /> Voice
-          </button>
-          <button type="button" onClick={() => setModality('video')} className={`px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all duration-300 ${modality === 'video' ? 'bg-orange-500/20 text-orange-300 shadow-[0_0_15px_rgba(249,115,22,0.2)] scale-105' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}>
-            <Video size={16} /> Video
-          </button>
-        </div>
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+    }
+  };
 
-        {/* Input Area */}
-        <div className="flex items-end gap-3 relative px-1">
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder={getPlaceholder()}
-            className="w-full bg-black/40 text-slate-100 placeholder-slate-500 rounded-2xl px-5 py-4 min-h-[64px] max-h-[250px] resize-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 transition-shadow text-base"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSubmit(e);
-              }
-            }}
-          />
-          <AnimatePresence>
-            {text.trim() && !isLoading && (
-              <motion.button 
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                type="submit" 
-                className="absolute right-4 bottom-3 p-3 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white shadow-lg transition-all"
-              >
-                <Send size={20} />
-              </motion.button>
-            )}
-          </AnimatePresence>
-          {isLoading && (
-             <button disabled className="absolute right-4 bottom-3 p-3 rounded-xl bg-indigo-600/50 text-white cursor-not-allowed">
-               <Send size={20} className="opacity-50" />
-             </button>
-          )}
+  const getPlaceholder = () => {
+    if (isRecording) return 'Recording... Click the red stop button when finished.';
+    switch (modality) {
+      case 'image': return 'Describe the image you want to generate...';
+      case 'voice': return 'Type the text you want spoken...';
+      case 'video': return 'Describe the video scene...';
+      default: return 'Ask anything';
+    }
+  };
+
+  const renderBadge = () => {
+    if (modality === 'text') return null;
+    
+    let Icon = FileText;
+    let label = '';
+    let colorClass = '';
+
+    if (modality === 'image') {
+      Icon = ImageIcon; label = 'Image'; colorClass = 'text-purple-400';
+    } else if (modality === 'voice') {
+      Icon = Mic; label = 'Voice'; colorClass = 'text-emerald-400';
+    } else if (modality === 'video') {
+      Icon = Video; label = 'Video'; colorClass = 'text-orange-400';
+    }
+
+    return (
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9, x: -10 }}
+        animate={{ opacity: 1, scale: 1, x: 0 }}
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-panel-hover border border-border cursor-pointer hover:bg-white/10 transition-colors"
+        onClick={() => setModality('text')}
+        title="Click to clear modality"
+      >
+        <Icon size={14} className={colorClass} />
+        <span className={`text-xs font-semibold ${colorClass}`}>{label}</span>
+      </motion.div>
+    );
+  };
+
+  return (
+    <div className="w-full flex flex-col gap-3 relative">
+      <form 
+        onSubmit={handleSubmit} 
+        className="w-full bg-panel rounded-[26px] p-3 flex flex-col shadow-sm border border-border transition-all focus-within:ring-1 focus-within:ring-white/20"
+      >
+        {/* Top area: Textarea */}
+        <textarea
+          disabled={isRecording}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={getPlaceholder()}
+          className="w-full bg-transparent text-slate-100 placeholder-slate-400 px-3 py-2 mb-2 min-h-[52px] max-h-[200px] resize-none focus:outline-none text-base font-medium leading-relaxed disabled:opacity-50"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSubmit(e);
+            }
+          }}
+        />
+
+        {/* Bottom area: Toolbar */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 relative">
+            
+            {/* Menu Dropdown Container */}
+            <div className="relative" ref={menuRef}>
+               <button 
+                  type="button"
+                  onClick={() => setMenuOpen(!menuOpen)}
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-200 hover:bg-panel-hover transition-colors flex-shrink-0"
+                >
+                  <Plus size={22} className={`transition-transform duration-300 ${menuOpen ? 'rotate-45' : ''}`} />
+               </button>
+
+               {/* Popup Menu */}
+               <AnimatePresence>
+                  {menuOpen && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute bottom-12 left-0 w-56 bg-menu-bg border border-border rounded-2xl shadow-xl overflow-hidden z-50 flex flex-col py-2"
+                    >
+                      <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-200 hover:bg-white/5 transition-colors text-left">
+                        <Paperclip size={18} className="text-slate-400" /> Add document
+                      </button>
+                      
+                      <div className="h-px bg-border my-1 mx-3" />
+                      
+                      <button type="button" onClick={() => handleActionClick('image')} className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-200 hover:bg-white/5 transition-colors text-left">
+                        <ImageIcon size={18} className="text-slate-400" /> Create image
+                      </button>
+                      <button type="button" onClick={() => handleActionClick('voice')} className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-200 hover:bg-white/5 transition-colors text-left">
+                        <Mic size={18} className="text-slate-400" /> Generate voice
+                      </button>
+                      <button type="button" onClick={() => handleActionClick('video')} className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-200 hover:bg-white/5 transition-colors text-left">
+                        <Video size={18} className="text-slate-400" /> Generate video
+                      </button>
+                    </motion.div>
+                  )}
+               </AnimatePresence>
+            </div>
+
+            {/* Selected Modality Badge */}
+            {renderBadge()}
+
+            {/* Hidden File Inputs */}
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={(e) => handleFileChange(e, false)} 
+              accept=".txt,.md,.csv,.pdf"
+              className="hidden" 
+            />
+            <input 
+              type="file" 
+              ref={audioInputRef} 
+              onChange={(e) => handleFileChange(e, true)} 
+              accept="audio/*"
+              className="hidden" 
+            />
+          </div>
+
+          <div className="flex items-center gap-1">
+             <div className="relative" ref={micMenuRef}>
+               <button 
+                 type="button" 
+                 onClick={() => setMicMenuOpen(!micMenuOpen)}
+                 className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors flex-shrink-0 ${micMenuOpen || modality === 'voice' || modality === 'stt' ? 'bg-white text-black' : 'text-slate-400 hover:text-slate-200 hover:bg-panel-hover'}`}
+               >
+                 <Mic size={18} />
+               </button>
+               
+               <AnimatePresence>
+                  {micMenuOpen && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute bottom-12 right-0 w-48 bg-menu-bg border border-border rounded-2xl shadow-xl overflow-hidden z-50 flex flex-col py-2"
+                    >
+                      <button type="button" onClick={() => { setMicMenuOpen(false); handleActionClick('voice'); }} className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-200 hover:bg-white/5 transition-colors text-left">
+                        <Mic size={18} className="text-slate-400" /> Generate Voice
+                      </button>
+                      <button type="button" onClick={startRecording} className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-200 hover:bg-white/5 transition-colors text-left">
+                        <Mic size={18} className="text-rose-400" /> Record from Mic (STT)
+                      </button>
+                      <button type="button" onClick={() => { setMicMenuOpen(false); audioInputRef.current?.click(); }} className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-200 hover:bg-white/5 transition-colors text-left">
+                        <AudioLines size={18} className="text-slate-400" /> Upload Audio File (STT)
+                      </button>
+                    </motion.div>
+                  )}
+               </AnimatePresence>
+             </div>
+             
+             {/* Submit button */}
+             {isRecording ? (
+               <button 
+                 type="button"
+                 onClick={stopRecording}
+                 className="w-9 h-9 rounded-full flex items-center justify-center bg-rose-500 text-white hover:bg-rose-600 transition-colors flex-shrink-0 animate-pulse"
+                 title="Stop Recording"
+               >
+                 <div className="w-3 h-3 bg-white rounded-sm"></div>
+               </button>
+             ) : text.trim() && !isLoading ? (
+               <button 
+                 type="submit"
+                 className="w-9 h-9 rounded-full flex items-center justify-center bg-white text-black hover:bg-slate-200 transition-colors flex-shrink-0"
+               >
+                 <Send size={16} className="ml-0.5" />
+               </button>
+             ) : (
+               <div className="w-9 h-9 rounded-full flex items-center justify-center text-slate-400 flex-shrink-0 bg-white text-black">
+                 <div className="flex gap-1">
+                   <div className="w-1 h-1.5 bg-black rounded-full animate-pulse"></div>
+                   <div className="w-1 h-2 bg-black rounded-full animate-pulse delay-75"></div>
+                   <div className="w-1 h-1 bg-black rounded-full animate-pulse delay-150"></div>
+                 </div>
+               </div>
+             )}
+          </div>
         </div>
-      </motion.form>
+      </form>
+
+      {/* Action Chips */}
+      {centered && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2 }}
+          className="flex flex-wrap items-center justify-center gap-3 mt-1"
+        >
+          <button 
+            onClick={() => handleActionClick('image')}
+            className="flex items-center gap-2 px-4 py-2 rounded-full border border-border hover:bg-panel transition-colors text-sm font-medium text-slate-300"
+          >
+            <ImageIcon size={15} className="text-purple-400" /> Create image
+          </button>
+          <button 
+            onClick={() => handleActionClick('voice')}
+            className="flex items-center gap-2 px-4 py-2 rounded-full border border-border hover:bg-panel transition-colors text-sm font-medium text-slate-300"
+          >
+            <Mic size={15} className="text-emerald-400" /> Generate voice
+          </button>
+          <button 
+            onClick={() => handleActionClick('video')}
+            className="flex items-center gap-2 px-4 py-2 rounded-full border border-border hover:bg-panel transition-colors text-sm font-medium text-slate-300"
+          >
+            <Video size={15} className="text-orange-400" /> Generate video
+          </button>
+        </motion.div>
+      )}
     </div>
   );
 }
