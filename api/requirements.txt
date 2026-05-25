@@ -20,6 +20,7 @@ minio>=7.2.0
 
 # HTTP Client
 httpx>=0.27.0
+modal>=0.63.0
 
 # Auth & Security
 python-jose[cryptography]>=3.3.0

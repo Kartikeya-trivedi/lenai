@@ -147,38 +147,52 @@ def generate_image(self, job_id: str):
     params = job.input_params or {}
 
     try:
-        # 3. Call Stable Diffusion API
-        sd_payload = {
-            "prompt": params.get("prompt", ""),
-            "negative_prompt": params.get("negative_prompt", ""),
-            "width": params.get("width", 512),
-            "height": params.get("height", 512),
-            "steps": params.get("steps", 20),
-            "cfg_scale": params.get("cfg_scale", 7.0),
-            "seed": params.get("seed", -1),
-            "batch_size": 1,
-            "n_iter": 1,
-        }
-
         _update_job_status(job_id, "processing", progress=20)
 
-        with httpx.Client(timeout=300.0) as client:
-            response = client.post(
-                f"{settings.SD_API_URL}/sdapi/v1/txt2img",
-                json=sd_payload,
+        if settings.MODAL_TOKEN_ID and settings.MODAL_TOKEN_SECRET:
+            import modal
+            logger.info("triggering_modal_function", function="generate_image_modal")
+            f = modal.Function.from_name("lenai-platform", "generate_image_modal")
+            base64_img = f.remote(
+                prompt=params.get("prompt", ""),
+                negative_prompt=params.get("negative_prompt", ""),
+                width=params.get("width", 512),
+                height=params.get("height", 512),
+                steps=params.get("steps", 20),
             )
+            _update_job_status(job_id, "processing", progress=70)
+            images = [base64_img]
+        else:
+            # 3. Call Stable Diffusion API locally
+            sd_payload = {
+                "prompt": params.get("prompt", ""),
+                "negative_prompt": params.get("negative_prompt", ""),
+                "width": params.get("width", 512),
+                "height": params.get("height", 512),
+                "steps": params.get("steps", 20),
+                "cfg_scale": params.get("cfg_scale", 7.0),
+                "seed": params.get("seed", -1),
+                "batch_size": 1,
+                "n_iter": 1,
+            }
 
-        _update_job_status(job_id, "processing", progress=70)
+            with httpx.Client(timeout=300.0) as client:
+                response = client.post(
+                    f"{settings.SD_API_URL}/sdapi/v1/txt2img",
+                    json=sd_payload,
+                )
 
-        if response.status_code != 200:
-            raise RuntimeError(
-                f"SD API returned {response.status_code}: {response.text[:500]}"
-            )
+            _update_job_status(job_id, "processing", progress=70)
 
-        result = response.json()
-        images = result.get("images", [])
-        if not images:
-            raise RuntimeError("SD API returned no images")
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"SD API returned {response.status_code}: {response.text[:500]}"
+                )
+
+            result = response.json()
+            images = result.get("images", [])
+            if not images:
+                raise RuntimeError("SD API returned no images")
 
         # 4. Decode base64 → upload to MinIO
         image_data = base64.b64decode(images[0])

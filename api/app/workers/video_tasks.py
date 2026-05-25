@@ -93,114 +93,135 @@ def process_video(self, job_id: str):
 
         # Determine if source is image or video
         ext = job.input_file_key.rsplit(".", 1)[-1].lower() if "." in job.input_file_key else "mp4"
-        source_path = os.path.join(workdir, f"source.{ext}")
-        with open(source_path, "wb") as f:
-            f.write(source_data)
-
         _update_job_status(job_id, "processing", progress=10)
 
-        # 2. Extract frames
-        frames_dir = os.path.join(workdir, "frames")
-        os.makedirs(frames_dir, exist_ok=True)
-
-        if ext in ("mp4", "avi", "mov", "webm", "mkv"):
-            frame_paths = extract_video_frames(
-                video_path=source_path,
-                output_dir=frames_dir,
+        if settings.MODAL_TOKEN_ID and settings.MODAL_TOKEN_SECRET:
+            import modal
+            logger.info("triggering_modal_function", function="process_video_modal")
+            f = modal.Function.from_name("lenai-platform", "process_video_modal")
+            video_data = f.remote(
+                source_data=source_data,
+                source_ext=ext,
+                prompt=prompt,
+                negative_prompt=params.get("negative_prompt", ""),
                 fps=target_fps,
+                max_frames=max_frames,
+                steps=params.get("steps", 15),
+                cfg_scale=params.get("cfg_scale", 7.0),
+                denoising_strength=params.get("denoising_strength", 0.5),
+                width=params.get("width", 512),
+                height=params.get("height", 512),
+                seed=params.get("seed", -1)
             )
+            _update_job_status(job_id, "processing", progress=90)
+            total_frames = max_frames
         else:
-            # Source is a single image — duplicate it for a short animation
-            import shutil
-            frame_paths = []
-            for i in range(min(max_frames, 8)):
-                frame_path = os.path.join(frames_dir, f"frame_{i:04d}.png")
-                shutil.copy2(source_path, frame_path)
-                frame_paths.append(frame_path)
+            source_path = os.path.join(workdir, f"source.{ext}")
+            with open(source_path, "wb") as f:
+                f.write(source_data)
 
-        # Limit frames
-        frame_paths = frame_paths[:max_frames]
-        total_frames = len(frame_paths)
-        logger.info("frames_extracted", job_id=job_id, total_frames=total_frames)
+            # 2. Extract frames
+            frames_dir = os.path.join(workdir, "frames")
+            os.makedirs(frames_dir, exist_ok=True)
 
-        _update_job_status(job_id, "processing", progress=20)
+            if ext in ("mp4", "avi", "mov", "webm", "mkv"):
+                frame_paths = extract_video_frames(
+                    video_path=source_path,
+                    output_dir=frames_dir,
+                    fps=target_fps,
+                )
+            else:
+                # Source is a single image — duplicate it for a short animation
+                import shutil
+                frame_paths = []
+                for i in range(min(max_frames, 8)):
+                    frame_path = os.path.join(frames_dir, f"frame_{i:04d}.png")
+                    shutil.copy2(source_path, frame_path)
+                    frame_paths.append(frame_path)
 
-        # 3. Apply SD img2img to each frame
-        styled_dir = os.path.join(workdir, "styled")
-        os.makedirs(styled_dir, exist_ok=True)
+            # Limit frames
+            frame_paths = frame_paths[:max_frames]
+            total_frames = len(frame_paths)
+            logger.info("frames_extracted", job_id=job_id, total_frames=total_frames)
 
-        for i, frame_path in enumerate(frame_paths):
-            # Read frame as base64
-            with open(frame_path, "rb") as f:
-                frame_b64 = base64.b64encode(f.read()).decode()
+            _update_job_status(job_id, "processing", progress=20)
 
-            # Call SD img2img
-            img2img_payload = {
-                "init_images": [frame_b64],
-                "prompt": prompt,
-                "negative_prompt": params.get("negative_prompt", ""),
-                "steps": params.get("steps", 15),  # Fewer steps for speed
-                "cfg_scale": params.get("cfg_scale", 7.0),
-                "denoising_strength": params.get("denoising_strength", 0.5),
-                "width": params.get("width", 512),
-                "height": params.get("height", 512),
-                "batch_size": 1,
-                "seed": params.get("seed", -1),
-            }
+            # 3. Apply SD img2img to each frame
+            styled_dir = os.path.join(workdir, "styled")
+            os.makedirs(styled_dir, exist_ok=True)
 
-            try:
-                with httpx.Client(timeout=300.0) as client:
-                    resp = client.post(
-                        f"{settings.SD_API_URL}/sdapi/v1/img2img",
-                        json=img2img_payload,
-                    )
+            for i, frame_path in enumerate(frame_paths):
+                # Read frame as base64
+                with open(frame_path, "rb") as f:
+                    frame_b64 = base64.b64encode(f.read()).decode()
 
-                if resp.status_code == 200:
-                    result = resp.json()
-                    images = result.get("images", [])
-                    if images:
-                        styled_data = base64.b64decode(images[0])
-                        styled_path = os.path.join(styled_dir, f"frame_{i:04d}.png")
-                        with open(styled_path, "wb") as f:
-                            f.write(styled_data)
+                # Call SD img2img
+                img2img_payload = {
+                    "init_images": [frame_b64],
+                    "prompt": prompt,
+                    "negative_prompt": params.get("negative_prompt", ""),
+                    "steps": params.get("steps", 15),  # Fewer steps for speed
+                    "cfg_scale": params.get("cfg_scale", 7.0),
+                    "denoising_strength": params.get("denoising_strength", 0.5),
+                    "width": params.get("width", 512),
+                    "height": params.get("height", 512),
+                    "batch_size": 1,
+                    "seed": params.get("seed", -1),
+                }
+
+                try:
+                    with httpx.Client(timeout=300.0) as client:
+                        resp = client.post(
+                            f"{settings.SD_API_URL}/sdapi/v1/img2img",
+                            json=img2img_payload,
+                        )
+
+                    if resp.status_code == 200:
+                        result = resp.json()
+                        images = result.get("images", [])
+                        if images:
+                            styled_data = base64.b64decode(images[0])
+                            styled_path = os.path.join(styled_dir, f"frame_{i:04d}.png")
+                            with open(styled_path, "wb") as f:
+                                f.write(styled_data)
+                        else:
+                            # Fallback: copy original frame
+                            shutil.copy2(frame_path, os.path.join(styled_dir, f"frame_{i:04d}.png"))
                     else:
-                        # Fallback: copy original frame
+                        logger.warning(
+                            "frame_processing_failed",
+                            job_id=job_id,
+                            frame=i,
+                            status=resp.status_code,
+                        )
                         shutil.copy2(frame_path, os.path.join(styled_dir, f"frame_{i:04d}.png"))
-                else:
+
+                except Exception as frame_exc:
                     logger.warning(
-                        "frame_processing_failed",
+                        "frame_sd_error",
                         job_id=job_id,
                         frame=i,
-                        status=resp.status_code,
+                        error=str(frame_exc),
                     )
                     shutil.copy2(frame_path, os.path.join(styled_dir, f"frame_{i:04d}.png"))
 
-            except Exception as frame_exc:
-                logger.warning(
-                    "frame_sd_error",
-                    job_id=job_id,
-                    frame=i,
-                    error=str(frame_exc),
-                )
-                shutil.copy2(frame_path, os.path.join(styled_dir, f"frame_{i:04d}.png"))
+                # Update progress (20% to 80% range for frame processing)
+                progress = 20 + int((i + 1) / total_frames * 60)
+                _update_job_status(job_id, "processing", progress=progress)
 
-            # Update progress (20% to 80% range for frame processing)
-            progress = 20 + int((i + 1) / total_frames * 60)
-            _update_job_status(job_id, "processing", progress=progress)
+            # 4. Reassemble frames into video
+            output_path = os.path.join(workdir, "output.mp4")
+            assemble_video_frames(
+                frames_dir=styled_dir,
+                output_path=output_path,
+                fps=target_fps,
+            )
 
-        # 4. Reassemble frames into video
-        output_path = os.path.join(workdir, "output.mp4")
-        assemble_video_frames(
-            frames_dir=styled_dir,
-            output_path=output_path,
-            fps=target_fps,
-        )
+            _update_job_status(job_id, "processing", progress=90)
 
-        _update_job_status(job_id, "processing", progress=90)
-
-        # 5. Upload result to MinIO
-        with open(output_path, "rb") as f:
-            video_data = f.read()
+            # Read final video
+            with open(output_path, "rb") as f:
+                video_data = f.read()
 
         output_key = f"video/{job_id}/{uuid.uuid4()}.mp4"
         storage.upload_file(

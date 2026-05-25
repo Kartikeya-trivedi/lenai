@@ -74,34 +74,40 @@ def transcribe_audio(self, job_id: str):
         _update_job_status(job_id, "processing", progress=30)
 
         # 2. Send to Whisper ASR
-        # Determine filename from key
-        filename = job.input_file_key.split("/")[-1] if "/" in job.input_file_key else "audio.wav"
+        if settings.MODAL_TOKEN_ID and settings.MODAL_TOKEN_SECRET:
+            import modal
+            logger.info("triggering_modal_function", function="transcribe_audio_modal")
+            f = modal.Function.from_name("lenai-platform", "transcribe_audio_modal")
+            transcript = f.remote(audio_data, params.get("language"))
+            _update_job_status(job_id, "processing", progress=70)
+        else:
+            filename = job.input_file_key.split("/")[-1] if "/" in job.input_file_key else "audio.wav"
 
-        with httpx.Client(timeout=600.0) as client:
-            files = {"audio_file": (filename, io.BytesIO(audio_data), "audio/wav")}
-            whisper_params = {
-                "task": "transcribe",
-                "output": "json",
-            }
-            language = params.get("language")
-            if language:
-                whisper_params["language"] = language
+            with httpx.Client(timeout=600.0) as client:
+                files = {"audio_file": (filename, io.BytesIO(audio_data), "audio/wav")}
+                whisper_params = {
+                    "task": "transcribe",
+                    "output": "json",
+                }
+                language = params.get("language")
+                if language:
+                    whisper_params["language"] = language
 
-            response = client.post(
-                f"{settings.WHISPER_API_URL}/asr",
-                files=files,
-                params=whisper_params,
-            )
+                response = client.post(
+                    f"{settings.WHISPER_API_URL}/asr",
+                    files=files,
+                    params=whisper_params,
+                )
 
-        _update_job_status(job_id, "processing", progress=70)
+            _update_job_status(job_id, "processing", progress=70)
 
-        if response.status_code != 200:
-            raise RuntimeError(
-                f"Whisper API returned {response.status_code}: {response.text[:500]}"
-            )
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"Whisper API returned {response.status_code}: {response.text[:500]}"
+                )
 
-        # 3. Parse transcript result
-        transcript = response.json() if response.headers.get("content-type", "").startswith("application/json") else {"text": response.text}
+            # 3. Parse transcript result
+            transcript = response.json() if response.headers.get("content-type", "").startswith("application/json") else {"text": response.text}
 
         # 4. Store transcript in MinIO
         transcript_json = json.dumps(transcript, ensure_ascii=False, indent=2)
@@ -220,22 +226,32 @@ def synthesize_speech(self, job_id: str):
 
         _update_job_status(job_id, "processing", progress=30)
 
-        # 2. Call Kokoro API
-        with httpx.Client(timeout=120.0) as client:
-            response = client.post(
-                f"{settings.KOKORO_API_URL}/v1/audio/speech",
-                json=tts_payload,
+        # 2. Call Kokoro API or Modal Function
+        if settings.MODAL_TOKEN_ID and settings.MODAL_TOKEN_SECRET:
+            import modal
+            logger.info("triggering_modal_function", function="synthesize_speech_modal")
+            f = modal.Function.from_name("lenai-platform", "synthesize_speech_modal")
+            audio_data = f.remote(
+                text=params.get("text", ""),
+                voice=params.get("voice", "af_bella"),
+                speed=params.get("speed", 1.0)
             )
+            _update_job_status(job_id, "processing", progress=70)
+        else:
+            with httpx.Client(timeout=120.0) as client:
+                response = client.post(
+                    f"{settings.KOKORO_API_URL}/v1/audio/speech",
+                    json=tts_payload,
+                )
 
-        _update_job_status(job_id, "processing", progress=70)
+            _update_job_status(job_id, "processing", progress=70)
 
-        if response.status_code != 200:
-            raise RuntimeError(
-                f"Kokoro API returned {response.status_code}: {response.text[:500]}"
-            )
-
-        # 3. Upload audio to MinIO
-        audio_data = response.content
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"Kokoro API returned {response.status_code}: {response.text[:500]}"
+                )
+                
+            audio_data = response.content
         output_key = f"voice_tts/{job_id}/{uuid.uuid4()}.mp3"
 
         storage.upload_file(
