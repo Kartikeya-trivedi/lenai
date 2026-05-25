@@ -10,7 +10,10 @@ const api = axios.create({
 // Guarantee headers are injected on every request
 api.interceptors.request.use(config => {
   config.headers['X-API-Key'] = 'lenai_sk_dummy';
-  config.headers['Content-Type'] = 'application/json';
+  // Let Axios automatically handle Content-Type for FormData, otherwise default to json
+  if (!(config.data instanceof FormData)) {
+    config.headers['Content-Type'] = 'application/json';
+  }
   return config;
 });
 
@@ -21,22 +24,24 @@ export const ApiClient = {
   },
 
   async generateImage(prompt) {
-    const res = await api.post('/v1/infer/image', {
-      prompt,
-      negative_prompt: 'blurry, low quality',
-      width: 512,
-      height: 512,
-      steps: 20
-    });
+    const formData = new FormData();
+    formData.append('prompt', prompt);
+    formData.append('negative_prompt', 'blurry, low quality');
+    formData.append('width', 512);
+    formData.append('height', 512);
+    formData.append('steps', 20);
+
+    const res = await api.post('/v1/infer/image', formData);
     return this.pollJob(res.data.job_id);
   },
 
   async generateVoice(text) {
-    const res = await api.post('/v1/infer/voice_tts', {
-      text,
-      voice: 'af_bella',
-      speed: 1.0
-    });
+    const formData = new FormData();
+    formData.append('text', text);
+    formData.append('voice', 'af_bella');
+    formData.append('speed', 1.0);
+
+    const res = await api.post('/v1/infer/voice_tts', formData);
     return this.pollJob(res.data.job_id);
   },
 
