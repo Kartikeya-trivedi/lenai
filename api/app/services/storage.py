@@ -31,6 +31,12 @@ class StorageService:
         self.public_endpoint = settings.MINIO_PUBLIC_ENDPOINT
         self.bucket_inputs = settings.MINIO_BUCKET_INPUTS
         self.bucket_outputs = settings.MINIO_BUCKET_OUTPUTS
+        
+        # Ensure Supabase S3 buckets exist on startup
+        try:
+            self.ensure_buckets()
+        except Exception as e:
+            logger.warning("could_not_ensure_buckets", error=str(e))
 
     def ensure_buckets(self) -> None:
         """Create input/output buckets if they don't exist."""

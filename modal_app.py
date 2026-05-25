@@ -294,8 +294,8 @@ def vllm_server():
     image=api_image,
     secrets=[
         modal.Secret.from_name("lenai-db-secret"),
-        modal.Secret.from_name("lenai-redis-secret", require=False),
-        modal.Secret.from_name("lenai-storage-secret", require=False),
+        modal.Secret.from_name("redis-secret"),
+        modal.Secret.from_name("lenai-storage-secret"),
     ],
     volumes={"/models": rag_models_volume}
 )
@@ -321,3 +321,30 @@ def api_gateway():
     fastapi_app.mount("/playground", StaticFiles(directory="/root/playground", html=True), name="playground")
     
     return fastapi_app
+
+
+# ---------------------------------------------------------------------------
+# Serverless Celery Worker (Distributed Queue)
+# ---------------------------------------------------------------------------
+@app.function(
+    image=api_image,
+    secrets=[
+        modal.Secret.from_name("lenai-db-secret"),
+        modal.Secret.from_name("redis-secret"),
+        modal.Secret.from_name("lenai-storage-secret"),
+    ],
+    keep_warm=1, # REQUIRED: Keeps the container alive 24/7 to poll Redis
+)
+def celery_worker_modal():
+    """Runs a persistent Celery worker on Modal to process jobs from Redis."""
+    import subprocess
+    import os
+    
+    cmd = [
+        "celery", "-A", "app.workers.celery_app", "worker", 
+        "--loglevel=info", "-Q", "image,voice,video,webhook", 
+        "--concurrency=4"
+    ]
+    
+    # We must start the worker inside the /root/app directory where code was copied
+    subprocess.run(cmd, cwd="/root/app", env=os.environ.copy())
