@@ -349,7 +349,8 @@ def api_gateway():
     os.environ["HF_HOME"] = CACHE_DIR
     
     # 3. Security
-    os.environ["CORS_ORIGINS"] = '["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000"]'
+    if "CORS_ORIGINS" not in os.environ:
+        os.environ["CORS_ORIGINS"] = '["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "https://lenai-gamma.vercel.app", "https://lenai-gamma.vercel.app/"]'
     
     from app.main import app as fastapi_app
     from fastapi.staticfiles import StaticFiles
