@@ -10,10 +10,6 @@ const api = axios.create({
 // Guarantee headers are injected on every request
 api.interceptors.request.use(config => {
   config.headers['X-API-Key'] = 'lenai_sk_dummy';
-  // Let Axios automatically handle Content-Type for FormData, otherwise default to json
-  if (!(config.data instanceof FormData)) {
-    config.headers['Content-Type'] = 'application/json';
-  }
   return config;
 });
 
