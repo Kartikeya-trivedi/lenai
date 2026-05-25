@@ -116,7 +116,7 @@ function App() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.8, ease: "easeOut" }}
-              className="flex-1 flex flex-col items-center justify-center text-center mt-20"
+              className="flex-1 flex flex-col items-center justify-center text-center pb-48"
             >
               <div className="w-20 h-20 mb-6 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-600/20 border border-indigo-500/30 flex items-center justify-center shadow-[0_0_50px_rgba(99,102,241,0.15)]">
                 <Sparkles size={40} className="text-indigo-400" />
