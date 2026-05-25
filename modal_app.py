@@ -24,17 +24,15 @@ rag_models_volume = modal.Volume.from_name("ktgpt-rag-models")
 # Container Image Definitions
 # ---------------------------------------------------------------------------
 def download_sd_weights():
-    """Downloads Stable Diffusion weights into the image cache at build time."""
-    from diffusers import StableDiffusionPipeline
+    """Downloads FLUX.2 Klein 4B weights into the image cache at build time."""
+    from diffusers import FluxPipeline
     import torch
     
-    print("Downloading Stable Diffusion weights (v1-5)...")
-    StableDiffusionPipeline.from_pretrained(
-        "runwayml/stable-diffusion-v1-5",
-        torch_dtype=torch.float16,
+    print("Downloading FLUX.2 Klein 4B weights...")
+    FluxPipeline.from_pretrained(
+        "black-forest-labs/FLUX.2-klein-4B",
+        torch_dtype=torch.bfloat16,
         cache_dir=CACHE_DIR,
-        safety_checker=None,
-        requires_safety_checker=False,
     )
     print("Download complete.")
 
@@ -54,6 +52,8 @@ inference_image = (
         "diffusers",
         "transformers",
         "accelerate",
+        "sentencepiece",
+        "protobuf",
         "openai-whisper",
         "ffmpeg-python"
     )
@@ -89,34 +89,32 @@ api_image = (
 # ---------------------------------------------------------------------------
 @app.function(
     image=inference_image,
-    gpu="T4",
+    gpu="A10G",
     volumes={CACHE_DIR: model_volume},
     scaledown_window=120, # Keep container warm for 2 mins after a request
 )
 def generate_image_modal(prompt: str, negative_prompt: str = "", width: int = 512, height: int = 512, steps: int = 20):
-    """Generates an image using Stable Diffusion on a Serverless T4 GPU."""
-    from diffusers import StableDiffusionPipeline
+    """Generates an image using FLUX.2 Klein on a Serverless A10G GPU."""
+    from diffusers import FluxPipeline
     import torch
     import io
     import base64
     
     # Load model (very fast because it's cached in the volume)
-    pipe = StableDiffusionPipeline.from_pretrained(
-        "runwayml/stable-diffusion-v1-5",
-        torch_dtype=torch.float16,
+    pipe = FluxPipeline.from_pretrained(
+        "black-forest-labs/FLUX.2-klein-4B",
+        torch_dtype=torch.bfloat16,
         cache_dir=CACHE_DIR,
-        safety_checker=None,
-        requires_safety_checker=False,
     ).to("cuda")
     
-    # pipe.enable_xformers_memory_efficient_attention()  # Requires xformers to be installed
-    
+    # Negative prompt is not universally supported in Flux out of the box unless configured correctly,
+    # but for safety we just pass the standard inference arguments.
     result = pipe(
         prompt=prompt,
-        negative_prompt=negative_prompt,
         width=width,
         height=height,
         num_inference_steps=steps,
+        guidance_scale=3.5,
     )
     
     image = result.images[0]

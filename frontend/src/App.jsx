@@ -129,13 +129,15 @@ function App() {
               </p>
             </motion.div>
           ) : (
-            <AnimatePresence initial={false}>
-              {messages.map(msg => (
-                <MessageBubble key={msg.id} {...msg} />
-              ))}
+            <>
+              <AnimatePresence initial={false}>
+                {messages.map(msg => (
+                  <MessageBubble key={msg.id} {...msg} />
+                ))}
+              </AnimatePresence>
               {/* Spacer to clear the absolute-positioned input area */}
-              <div className="h-32 flex-shrink-0" />
-            </AnimatePresence>
+              <div className="h-56 flex-shrink-0 w-full" />
+            </>
           )}
         </div>
       </main>
