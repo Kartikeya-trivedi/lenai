@@ -6,21 +6,22 @@ import {
   Plus, 
   Paperclip,
   FileText,
-  Video,
   AudioLines,
-  Pen
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function OmniInput({ onSubmit, onFileUpload, isLoading, centered }) {
+export default function OmniInput({ onSubmit, onFileUpload, onTranscribeAudio, isLoading, centered }) {
   const [text, setText] = useState('');
-  const [modality, setModality] = useState('text'); // text, image, voice, video
+  const [modality, setModality] = useState('text'); // text, image, voice
   const [menuOpen, setMenuOpen] = useState(false);
   const [micMenuOpen, setMicMenuOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   
   const fileInputRef = useRef(null);
   const audioInputRef = useRef(null);
+  const textareaRef = useRef(null);
   const menuRef = useRef(null);
   const micMenuRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -42,7 +43,7 @@ export default function OmniInput({ onSubmit, onFileUpload, isLoading, centered 
 
   const handleSubmit = (e) => {
     if (e) e.preventDefault();
-    if (!text.trim() || isLoading) return;
+    if (!text.trim() || isLoading || isTranscribing) return;
     onSubmit(text, modality);
     setText('');
     setModality('text');
@@ -50,10 +51,13 @@ export default function OmniInput({ onSubmit, onFileUpload, isLoading, centered 
 
   const handleFileChange = (e, isAudio = false) => {
     const file = e.target.files[0];
-    if (file && onFileUpload) {
+    if (file && isAudio) {
+      transcribeIntoPrompt(file);
+    } else if (file && onFileUpload) {
       onFileUpload(file, isAudio);
     }
     setMenuOpen(false);
+    setMicMenuOpen(false);
     e.target.value = null;
   };
 
@@ -62,7 +66,35 @@ export default function OmniInput({ onSubmit, onFileUpload, isLoading, centered 
     setMenuOpen(false);
   };
 
+  const transcribeIntoPrompt = async (file) => {
+    if (!file || !onTranscribeAudio || isTranscribing) return;
+
+    setIsTranscribing(true);
+    setModality('text');
+
+    try {
+      const transcript = (await onTranscribeAudio(file))?.trim();
+      if (!transcript) {
+        alert("I couldn't hear anything clearly.");
+        return;
+      }
+
+      setText(prev => {
+        const current = prev.trim();
+        return current ? `${current} ${transcript}` : transcript;
+      });
+      setTimeout(() => textareaRef.current?.focus(), 0);
+    } catch (err) {
+      console.error("Error transcribing audio:", err);
+      alert("Audio transcription failed.");
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
   const startRecording = async () => {
+    if (isTranscribing || isLoading) return;
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
@@ -81,10 +113,8 @@ export default function OmniInput({ onSubmit, onFileUpload, isLoading, centered 
         
         stream.getTracks().forEach(track => track.stop());
         
-        if (onFileUpload) {
-          onFileUpload(audioFile, true);
-        }
         setIsRecording(false);
+        transcribeIntoPrompt(audioFile);
       };
 
       mediaRecorder.start();
@@ -103,11 +133,11 @@ export default function OmniInput({ onSubmit, onFileUpload, isLoading, centered 
   };
 
   const getPlaceholder = () => {
+    if (isTranscribing) return 'Transcribing audio...';
     if (isRecording) return 'Recording... Click the red stop button when finished.';
     switch (modality) {
       case 'image': return 'Describe the image you want to generate...';
       case 'voice': return 'Type the text you want spoken...';
-      case 'video': return 'Describe the video scene...';
       default: return 'Ask anything';
     }
   };
@@ -123,8 +153,6 @@ export default function OmniInput({ onSubmit, onFileUpload, isLoading, centered 
       Icon = ImageIcon; label = 'Image'; colorClass = 'text-purple-400';
     } else if (modality === 'voice') {
       Icon = Mic; label = 'Voice'; colorClass = 'text-emerald-400';
-    } else if (modality === 'video') {
-      Icon = Video; label = 'Video'; colorClass = 'text-orange-400';
     }
 
     return (
@@ -149,7 +177,8 @@ export default function OmniInput({ onSubmit, onFileUpload, isLoading, centered 
       >
         {/* Top area: Textarea */}
         <textarea
-          disabled={isRecording}
+          ref={textareaRef}
+          disabled={isRecording || isTranscribing}
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={getPlaceholder()}
@@ -198,9 +227,6 @@ export default function OmniInput({ onSubmit, onFileUpload, isLoading, centered 
                       <button type="button" onClick={() => handleActionClick('voice')} className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-200 hover:bg-white/5 transition-colors text-left">
                         <Mic size={18} className="text-slate-400" /> Generate voice
                       </button>
-                      <button type="button" onClick={() => handleActionClick('video')} className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-200 hover:bg-white/5 transition-colors text-left">
-                        <Video size={18} className="text-slate-400" /> Generate video
-                      </button>
                     </motion.div>
                   )}
                </AnimatePresence>
@@ -231,9 +257,10 @@ export default function OmniInput({ onSubmit, onFileUpload, isLoading, centered 
                <button 
                  type="button" 
                  onClick={() => setMicMenuOpen(!micMenuOpen)}
-                 className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors flex-shrink-0 ${micMenuOpen || modality === 'voice' || modality === 'stt' ? 'bg-white text-black' : 'text-slate-400 hover:text-slate-200 hover:bg-panel-hover'}`}
+                 disabled={isTranscribing}
+                 className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed ${micMenuOpen || modality === 'voice' || isRecording || isTranscribing ? 'bg-white text-black' : 'text-slate-400 hover:text-slate-200 hover:bg-panel-hover'}`}
                >
-                 <Mic size={18} />
+                 {isTranscribing ? <Loader2 size={18} className="animate-spin" /> : <Mic size={18} />}
                </button>
                
                <AnimatePresence>
@@ -249,10 +276,10 @@ export default function OmniInput({ onSubmit, onFileUpload, isLoading, centered 
                         <Mic size={18} className="text-slate-400" /> Generate Voice
                       </button>
                       <button type="button" onClick={startRecording} className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-200 hover:bg-white/5 transition-colors text-left">
-                        <Mic size={18} className="text-rose-400" /> Record from Mic (STT)
+                        <Mic size={18} className="text-rose-400" /> Dictate prompt
                       </button>
                       <button type="button" onClick={() => { setMicMenuOpen(false); audioInputRef.current?.click(); }} className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-200 hover:bg-white/5 transition-colors text-left">
-                        <AudioLines size={18} className="text-slate-400" /> Upload Audio File (STT)
+                        <AudioLines size={18} className="text-slate-400" /> Upload audio prompt
                       </button>
                     </motion.div>
                   )}
@@ -269,7 +296,7 @@ export default function OmniInput({ onSubmit, onFileUpload, isLoading, centered 
                >
                  <div className="w-3 h-3 bg-white rounded-sm"></div>
                </button>
-             ) : text.trim() && !isLoading ? (
+             ) : text.trim() && !isLoading && !isTranscribing ? (
                <button 
                  type="submit"
                  className="w-9 h-9 rounded-full flex items-center justify-center bg-white text-black hover:bg-slate-200 transition-colors flex-shrink-0"
@@ -308,12 +335,6 @@ export default function OmniInput({ onSubmit, onFileUpload, isLoading, centered 
             className="flex items-center gap-2 px-4 py-2 rounded-full border border-border hover:bg-panel transition-colors text-sm font-medium text-slate-300"
           >
             <Mic size={15} className="text-emerald-400" /> Generate voice
-          </button>
-          <button 
-            onClick={() => handleActionClick('video')}
-            className="flex items-center gap-2 px-4 py-2 rounded-full border border-border hover:bg-panel transition-colors text-sm font-medium text-slate-300"
-          >
-            <Video size={15} className="text-orange-400" /> Generate video
           </button>
         </motion.div>
       )}

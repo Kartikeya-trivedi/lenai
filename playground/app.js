@@ -202,12 +202,6 @@ async function submitInference(e) {
             formData.append('text', document.getElementById('tts-text').value);
             formData.append('voice', document.getElementById('tts-voice').value);
             formData.append('speed', document.getElementById('tts-speed').value);
-        } else if (currentModality === 'video') {
-            formData.append('prompt', document.getElementById('vid-prompt').value);
-            const fileInput = document.getElementById('vid-file');
-            if (fileInput.files.length > 0) {
-                formData.append('file', fileInput.files[0]);
-            }
         }
 
         if (currentModality === 'rag') {
@@ -366,8 +360,6 @@ function updateJobResult(data) {
             outputEl.innerHTML = `<img src="${data.output_url}" class="result-image" alt="Generated image">`;
         } else if (data.modality === 'voice_tts') {
             outputEl.innerHTML = `<audio controls class="result-audio"><source src="${data.output_url}" type="audio/mpeg"></audio>`;
-        } else if (data.modality === 'video') {
-            outputEl.innerHTML = `<video controls class="result-video"><source src="${data.output_url}" type="video/mp4"></video>`;
         } else if (data.modality === 'voice_stt') {
             outputEl.innerHTML = `<div class="result-json">${JSON.stringify(data, null, 2)}</div>`;
         }
@@ -436,9 +428,6 @@ function showCreateKeyModal() {
                 </label>
                 <label style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer;">
                     <input type="checkbox" class="scope-cb" value="voice_tts" checked> Voice TTS
-                </label>
-                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer;">
-                    <input type="checkbox" class="scope-cb" value="video" checked> Video
                 </label>
             </div>
         </div>

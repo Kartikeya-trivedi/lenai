@@ -33,7 +33,7 @@ async def seed():
             key_hash=ApiKey.hash_key(dev_key_raw),
             key_prefix=dev_key_raw[:16],
             name="Development Key",
-            scopes=["image", "voice_stt", "voice_tts", "video"],
+            scopes=["image", "voice_stt", "voice_tts"],
             rate_limit_rpm=120,
             monthly_request_cap=100000,
             is_active=True,

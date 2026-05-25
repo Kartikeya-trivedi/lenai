@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import math
 import uuid
+import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +20,36 @@ from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/v1/jobs", tags=["Jobs"])
+
+
+def _job_response_with_output_data(job) -> JobResponse:
+    response = JobResponse.model_validate(job)
+
+    if (
+        response.modality != "voice_stt"
+        or response.status != "completed"
+        or not getattr(job, "output_file_key", None)
+    ):
+        return response
+
+    try:
+        from app.config import get_settings
+        from app.services.storage import get_storage
+
+        settings = get_settings()
+        transcript_bytes = get_storage().download_file(
+            bucket=settings.MINIO_BUCKET_OUTPUTS,
+            key=job.output_file_key,
+        )
+        response.output_data = json.loads(transcript_bytes.decode("utf-8"))
+    except Exception as exc:
+        logger.warning(
+            "job_output_data_hydration_failed",
+            job_id=str(job.id),
+            error=str(exc),
+        )
+
+    return response
 
 
 @router.get(
@@ -43,6 +74,7 @@ async def get_job(
                 status=data["status"],
                 modality=data["modality"],
                 output_url=data.get("output_url"),
+                output_data=data.get("output_data"),
                 error_message=data.get("error_message"),
                 progress=data.get("progress", 0),
                 created_at=datetime.now(timezone.utc),
@@ -63,7 +95,7 @@ async def get_job(
             detail=f"Job {job_id} not found",
         )
 
-    return JobResponse.model_validate(job)
+    return _job_response_with_output_data(job)
 
 
 @router.get(

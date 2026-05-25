@@ -151,8 +151,9 @@ def generate_image(self, job_id: str):
 
         import os
         if os.getenv("RUNNING_IN_MODAL") == "true":
-            import modal
-            f = modal.Function.from_name("lenai-platform", "generate_image_modal")
+            from app.workers.modal_functions import get_modal_function
+
+            f = get_modal_function("generate_image_modal")
             base64_img = f.remote(
                 prompt=params.get("prompt", ""),
                 negative_prompt=params.get("negative_prompt", ""),

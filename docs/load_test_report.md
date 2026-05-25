@@ -45,9 +45,8 @@ The following benchmarks were established on a development machine (CPU-only, 16
 | Image (512x512, 20 steps) | 60s | 120s | 180s | CPU is the bottleneck |
 | Voice STT (30s audio) | 15s | 30s | 45s | Whisper tiny model |
 | Voice TTS (100 words) | 5s | 10s | 15s | Kokoro is lightweight |
-| Video (8 frames) | 480s | 720s | 900s | 8 × SD img2img calls |
 
-> **With GPU:** Image drops to 3-5s, STT to 2-5s, video to 30-60s.
+> **With GPU:** Image drops to 3-5s and STT to 2-5s.
 
 ## Bottleneck Analysis
 

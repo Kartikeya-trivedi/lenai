@@ -36,7 +36,6 @@ class JobStatus(str, enum.Enum):
 
 class Modality(str, enum.Enum):
     IMAGE = "image"
-    VIDEO = "video"
     VOICE_STT = "voice_stt"
     VOICE_TTS = "voice_tts"
 

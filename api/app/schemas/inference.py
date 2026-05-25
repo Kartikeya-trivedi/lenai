@@ -60,20 +60,6 @@ class VoiceTTSRequest(BaseModel):
     )
 
 
-class VideoRequest(BaseModel):
-    """Video generation/style-transfer request."""
-
-    prompt: str = Field(..., min_length=1, max_length=2000, description="Style prompt")
-    source_image_key: Optional[str] = Field(
-        default=None, description="MinIO key for source image"
-    )
-    frames: int = Field(default=24, ge=4, le=120, description="Number of frames")
-    fps: int = Field(default=8, ge=1, le=30, description="Frames per second")
-    webhook_url: Optional[str] = Field(
-        default=None, description="Callback URL for job completion"
-    )
-
-
 class InferenceResponse(BaseModel):
     """Immediate response after submitting an inference request."""
 

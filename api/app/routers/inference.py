@@ -1,12 +1,11 @@
 """
 Inference endpoint — POST /v1/infer/{modality}
-Accepts requests for image, voice_stt, voice_tts, and video.
+Accepts requests for image, voice_stt, and voice_tts.
 Returns a job ID immediately; inference runs asynchronously.
 """
 
 from __future__ import annotations
 
-import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status, BackgroundTasks
@@ -16,13 +15,7 @@ from app.database import get_db
 from app.dependencies import get_current_api_key
 from app.models.api_key import ApiKey
 from app.models.job import Modality
-from app.schemas.inference import (
-    ImageGenerationRequest,
-    InferenceResponse,
-    VideoRequest,
-    VoiceSTTRequest,
-    VoiceTTSRequest,
-)
+from app.schemas.inference import InferenceResponse
 from app.services.inference import InferenceService
 from app.utils.logging import get_logger
 
@@ -44,7 +37,7 @@ async def create_inference_job(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     api_key: ApiKey = Depends(get_current_api_key),
-    # Image / TTS / Video params come as JSON body
+    # Image / TTS params come as JSON body
     prompt: Optional[str] = Form(default=None),
     negative_prompt: Optional[str] = Form(default=None),
     width: Optional[int] = Form(default=512),
@@ -64,7 +57,6 @@ async def create_inference_job(
     - **image**: text-to-image generation via Stable Diffusion
     - **voice_stt**: speech-to-text transcription via Whisper
     - **voice_tts**: text-to-speech synthesis via Kokoro
-    - **video**: frame-based video generation via SD img2img
     """
     # Validate modality
     if modality not in VALID_MODALITIES:
@@ -86,7 +78,6 @@ async def create_inference_job(
     import os
     if os.getenv("SKIP_AUTH", "").lower() == "true":
         import uuid
-        import asyncio
         from app.demo_state import FAKE_JOBS
         
         job_id = uuid.uuid4()
@@ -94,9 +85,10 @@ async def create_inference_job(
         
         async def run_modal_demo(jid: str, mod: str, p: dict):
             try:
-                import modal
                 if mod == Modality.IMAGE.value:
-                    f = modal.Function.from_name("lenai-platform", "generate_image_modal")
+                    from app.workers.modal_functions import get_modal_function
+
+                    f = get_modal_function("generate_image_modal")
                     base64_img = await f.remote.aio(
                         prompt=p.get("prompt", "A beautiful sunset") or "A beautiful sunset",
                         negative_prompt=p.get("negative_prompt", ""),
@@ -173,11 +165,6 @@ def _build_params(modality: str, local_vars: dict) -> dict:
             "speed": local_vars.get("speed", 1.0),
             "webhook_url": local_vars.get("webhook_url"),
         }
-    elif modality == Modality.VIDEO.value:
-        return {
-            "prompt": local_vars.get("prompt", ""),
-            "webhook_url": local_vars.get("webhook_url"),
-        }
     return {}
 
 
@@ -187,6 +174,5 @@ def _estimate_time(modality: str) -> int:
         Modality.IMAGE.value: 60,
         Modality.VOICE_STT.value: 30,
         Modality.VOICE_TTS.value: 10,
-        Modality.VIDEO.value: 120,
     }
     return estimates.get(modality, 60)

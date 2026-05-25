@@ -76,9 +76,25 @@ def transcribe_audio(self, job_id: str):
         # 2. Send to Whisper ASR
         import os
         if os.getenv("RUNNING_IN_MODAL") == "true":
-            import modal
-            f = modal.Function.from_name("lenai-platform", "transcribe_audio_modal")
-            transcript = f.remote(audio_data, params.get("language"))
+            stt_url = os.getenv("MODAL_STT_URL")
+            if stt_url:
+                import base64
+
+                with httpx.Client(timeout=600.0) as client:
+                    response = client.post(
+                        stt_url,
+                        json={
+                            "audio_base64": base64.b64encode(audio_data).decode("ascii"),
+                            "language": params.get("language"),
+                        },
+                    )
+                response.raise_for_status()
+                transcript = response.json()
+            else:
+                from app.workers.modal_functions import get_modal_function
+
+                f = get_modal_function("transcribe_audio_modal")
+                transcript = f.remote(audio_data, params.get("language"))
             _update_job_status(job_id, "processing", progress=70)
         else:
             filename = job.input_file_key.split("/")[-1] if "/" in job.input_file_key else "audio.wav"
@@ -229,13 +245,30 @@ def synthesize_speech(self, job_id: str):
         # 2. Call Kokoro API or Modal Function
         import os
         if os.getenv("RUNNING_IN_MODAL") == "true":
-            import modal
-            f = modal.Function.from_name("lenai-platform", "synthesize_speech_modal")
-            audio_data = f.remote(
-                text=params.get("text", ""),
-                voice=params.get("voice", "af_bella"),
-                speed=params.get("speed", 1.0)
-            )
+            tts_url = os.getenv("MODAL_TTS_URL")
+            if tts_url:
+                import base64
+
+                with httpx.Client(timeout=120.0) as client:
+                    response = client.post(
+                        tts_url,
+                        json={
+                            "text": params.get("text", ""),
+                            "voice": params.get("voice", "af_bella"),
+                            "speed": params.get("speed", 1.0),
+                        },
+                    )
+                response.raise_for_status()
+                audio_data = base64.b64decode(response.json()["audio_base64"])
+            else:
+                from app.workers.modal_functions import get_modal_function
+
+                f = get_modal_function("synthesize_speech_modal")
+                audio_data = f.remote(
+                    text=params.get("text", ""),
+                    voice=params.get("voice", "af_bella"),
+                    speed=params.get("speed", 1.0)
+                )
             _update_job_status(job_id, "processing", progress=70)
         else:
             with httpx.Client(timeout=120.0) as client:

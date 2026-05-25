@@ -24,7 +24,6 @@ The platform's costs are driven by **compute time** (model inference), **storage
 | Image (512x512) | 5s | $0.0021 | 0.5 MB × $0.0001 | **$0.0022** |
 | Voice STT (1 min audio) | 3s | $0.0013 | 0.01 MB | **$0.0013** |
 | Voice TTS (100 words) | 2s | $0.0008 | 0.3 MB | **$0.0009** |
-| Video (10 frames) | 50s | $0.021 | 5 MB × $0.0005 | **$0.0215** |
 
 ---
 
@@ -39,7 +38,6 @@ The platform's costs are driven by **compute time** (model inference), **storage
 | Image generation | 50 images |
 | Voice STT | 30 minutes audio |
 | Voice TTS | 20 requests |
-| Video | Not included |
 | Storage retention | 24 hours |
 | Support | Community |
 
@@ -57,7 +55,6 @@ The platform's costs are driven by **compute time** (model inference), **storage
 | Image generation | 5,000 images |
 | Voice STT | 500 minutes audio |
 | Voice TTS | 2,000 requests |
-| Video | 100 clips (8 frames each) |
 | Storage retention | 7 days |
 | API keys | 5 |
 | Webhooks | ✅ |
@@ -116,7 +113,6 @@ Beyond tier limits, charge per unit:
 | Image | $0.005/image |
 | Voice STT | $0.006/minute |
 | Voice TTS | $0.003/request |
-| Video | $0.05/clip |
 | Storage | $0.15/GB/month |
 
 ---

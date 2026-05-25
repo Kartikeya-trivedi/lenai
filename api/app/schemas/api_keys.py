@@ -16,7 +16,7 @@ class CreateApiKeyRequest(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=255, description="Key name")
     scopes: List[str] = Field(
-        default_factory=lambda: ["image", "voice_stt", "voice_tts", "video"],
+        default_factory=lambda: ["image", "voice_stt", "voice_tts"],
         description="Allowed modalities",
     )
     rate_limit_rpm: int = Field(default=60, ge=1, le=10000, description="Requests per minute")

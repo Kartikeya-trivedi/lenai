@@ -3,7 +3,8 @@ LenAI — Cloud Deployment Script (Modal + Supabase)
 ===================================================
 This script defines the serverless cloud architecture using Modal.
 It deploys the FastAPI gateway and dynamically provisions GPU functions
-for media inference, downloading weights into a volume during build time.
+for image/LLM inference plus CPU voice workers, downloading weights into a
+volume during build time.
 """
 
 import modal
@@ -53,18 +54,12 @@ def download_kokoro_models():
     print("Kokoro models downloaded.")
 
 def download_sd_weights():
-    from diffusers import DiffusionPipeline, AutoPipelineForImage2Image
+    from diffusers import DiffusionPipeline
     import torch
     print("Downloading FLUX.2 Klein 4B weights...")
     DiffusionPipeline.from_pretrained(
         "black-forest-labs/FLUX.2-klein-4B",
         torch_dtype=torch.bfloat16,
-        cache_dir=CACHE_DIR,
-    )
-    print("Downloading SD 1.5 weights (for Video Img2Img)...")
-    AutoPipelineForImage2Image.from_pretrained(
-        "runwayml/stable-diffusion-v1-5",
-        torch_dtype=torch.float16,
         cache_dir=CACHE_DIR,
     )
     print("Download complete.")
@@ -86,8 +81,8 @@ def download_rag_models():
     AutoModelForSequenceClassification.from_pretrained("cross-encoder/ms-marco-MiniLM-L-6-v2", cache_dir=CACHE_DIR)
     print("RAG models downloaded.")
 
-# Image for the GPU Inference workers
-inference_image = (
+# Image for GPU image generation workers.
+image_generation_image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install("pip>=24.0")
     .pip_install(
@@ -97,13 +92,25 @@ inference_image = (
         "accelerate",
         "sentencepiece",
         "protobuf",
+    )
+    .run_function(download_sd_weights, volumes={CACHE_DIR: model_volume})
+)
+
+# Image for CPU voice workers. Whisper tiny and Kokoro do not need GPU here.
+voice_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .pip_install("pip>=24.0")
+    .pip_install(
+        "torch",
         "openai-whisper",
         "ffmpeg-python",
         "kokoro>=0.3.4",
-        "soundfile"
+        "soundfile",
+        "fastapi[standard]",
+        "huggingface_hub",
+        "numpy",
     )
-    .apt_install("ffmpeg")
-    .run_function(download_sd_weights, volumes={CACHE_DIR: model_volume})
+    .apt_install("ffmpeg", "espeak-ng")
     .run_function(download_whisper_weights, volumes={CACHE_DIR: model_volume})
     .run_function(download_kokoro_models, volumes={CACHE_DIR: model_volume})
 )
@@ -131,14 +138,14 @@ api_image = (
 )
 
 # ---------------------------------------------------------------------------
-# Serverless GPU Inference Functions
+# Serverless Inference Functions
 # ---------------------------------------------------------------------------
 @app.function(
-    image=inference_image,
+    image=image_generation_image,
     gpu="A10G",
     volumes={CACHE_DIR: model_volume},
     scaledown_window=120,
-    keep_warm=1,
+    min_containers=1,
 )
 def generate_image_modal(prompt: str, negative_prompt: str = "", width: int = 512, height: int = 512, steps: int = 20):
     from diffusers import DiffusionPipeline
@@ -165,17 +172,19 @@ def generate_image_modal(prompt: str, negative_prompt: str = "", width: int = 51
     return base64.b64encode(buf.getvalue()).decode("utf-8")
 
 @app.function(
-    image=inference_image,
-    gpu="A10G",
+    image=voice_image,
     volumes={CACHE_DIR: model_volume},
     scaledown_window=60,
-    keep_warm=1,
 )
 def transcribe_audio_modal(audio_bytes: bytes, language: str = None):
+    return _transcribe_audio_bytes(audio_bytes, language=language)
+
+
+def _transcribe_audio_bytes(audio_bytes: bytes, language: str = None):
     import whisper
     import tempfile
     import os
-    model = whisper.load_model("tiny", download_root=CACHE_DIR).to("cuda")
+    model = whisper.load_model("tiny", download_root=CACHE_DIR)
     
     with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
         tmp.write(audio_bytes)
@@ -188,22 +197,38 @@ def transcribe_audio_modal(audio_bytes: bytes, language: str = None):
         os.remove(tmp_path)
 
 @app.function(
-    image=inference_image,
-    gpu="A10G",
+    image=voice_image,
     volumes={CACHE_DIR: model_volume},
     scaledown_window=60,
-    keep_warm=1,
+)
+@modal.fastapi_endpoint(method="POST")
+def transcribe_audio_http(payload: dict):
+    import base64
+
+    audio_bytes = base64.b64decode(payload["audio_base64"])
+    return _transcribe_audio_bytes(audio_bytes, language=payload.get("language"))
+
+@app.function(
+    image=voice_image,
+    volumes={CACHE_DIR: model_volume},
+    scaledown_window=60,
 )
 def synthesize_speech_modal(text: str, voice: str = "af_bella", speed: float = 1.0):
+    return _synthesize_speech_bytes(text=text, voice=voice, speed=speed)
+
+
+def _synthesize_speech_bytes(text: str, voice: str = "af_bella", speed: float = 1.0):
     import os
     import sys
+    import subprocess
+    import tempfile
     
     # Load spacy models from the persistent volume
     sys.path.insert(0, f"{CACHE_DIR}/spacy_models")
     os.environ["HF_HOME"] = CACHE_DIR
     
     import soundfile as sf
-    import io
+    import numpy as np
     from kokoro import KPipeline
     
     pipeline = KPipeline(lang_code='a')
@@ -212,88 +237,55 @@ def synthesize_speech_modal(text: str, voice: str = "af_bella", speed: float = 1
     audio_chunks = []
     for _, _, audio in generator:
         if audio is not None:
-            audio_chunks.extend(audio.tolist() if hasattr(audio, 'tolist') else audio)
-            
-    buf = io.BytesIO()
-    sf.write(buf, audio_chunks, 24000, format='WAV')
-    return buf.getvalue()
+            if hasattr(audio, "detach"):
+                audio = audio.detach().cpu().numpy()
+            else:
+                audio = np.asarray(audio)
+            audio_chunks.append(audio.astype("float32"))
+
+    if not audio_chunks:
+        raise ValueError("Kokoro produced no audio")
+
+    audio_data = np.concatenate(audio_chunks)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        wav_path = os.path.join(tmpdir, "speech.wav")
+        mp3_path = os.path.join(tmpdir, "speech.mp3")
+        sf.write(wav_path, audio_data, 24000, format="WAV")
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                wav_path,
+                "-codec:a",
+                "libmp3lame",
+                "-b:a",
+                "128k",
+                mp3_path,
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        with open(mp3_path, "rb") as f:
+            return f.read()
 
 @app.function(
-    image=inference_image,
-    gpu="A10G",
+    image=voice_image,
     volumes={CACHE_DIR: model_volume},
-    scaledown_window=120,
-    timeout=600,
-    keep_warm=1,
+    scaledown_window=60,
 )
-def process_video_modal(
-    source_data: bytes, source_ext: str, prompt: str, negative_prompt: str = "",
-    fps: int = 8, max_frames: int = 24, steps: int = 15, cfg_scale: float = 7.0,
-    denoising_strength: float = 0.5, width: int = 512, height: int = 512, seed: int = -1
-):
-    import tempfile
-    import os
-    import subprocess
-    import shutil
-    import torch
-    from PIL import Image
-    from diffusers import AutoPipelineForImage2Image
-    
-    workdir = tempfile.mkdtemp()
-    try:
-        source_path = os.path.join(workdir, f"source.{source_ext}")
-        with open(source_path, "wb") as f:
-            f.write(source_data)
-        
-        frames_dir = os.path.join(workdir, "frames")
-        os.makedirs(frames_dir, exist_ok=True)
-        
-        if source_ext in ("mp4", "avi", "mov", "webm", "mkv"):
-            cmd = ["ffmpeg", "-i", source_path, "-vf", f"fps={fps}", os.path.join(frames_dir, "frame_%04d.png")]
-            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            frame_files = sorted(os.listdir(frames_dir))
-        else:
-            frame_files = []
-            for i in range(min(max_frames, 8)):
-                name = f"frame_{i:04d}.png"
-                shutil.copy2(source_path, os.path.join(frames_dir, name))
-                frame_files.append(name)
-        
-        frame_files = frame_files[:max_frames]
-        
-        pipe = AutoPipelineForImage2Image.from_pretrained(
-            "runwayml/stable-diffusion-v1-5",
-            torch_dtype=torch.float16,
-            cache_dir=CACHE_DIR,
-        ).to("cuda")
-        
-        styled_dir = os.path.join(workdir, "styled")
-        os.makedirs(styled_dir, exist_ok=True)
-        generator = torch.Generator("cuda").manual_seed(seed) if seed != -1 else None
-        
-        for name in frame_files:
-            in_path = os.path.join(frames_dir, name)
-            out_path = os.path.join(styled_dir, name)
-            init_img = Image.open(in_path).convert("RGB").resize((width, height))
-            result = pipe(
-                prompt=prompt,
-                image=init_img,
-                negative_prompt=negative_prompt,
-                num_inference_steps=steps,
-                guidance_scale=cfg_scale,
-                strength=denoising_strength,
-                generator=generator
-            )
-            result.images[0].save(out_path)
-            
-        output_path = os.path.join(workdir, "output.mp4")
-        cmd = ["ffmpeg", "-framerate", str(fps), "-i", os.path.join(styled_dir, "frame_%04d.png"), "-c:v", "libx264", "-pix_fmt", "yuv420p", output_path]
-        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        
-        with open(output_path, "rb") as f:
-            return f.read()
-    finally:
-        shutil.rmtree(workdir, ignore_errors=True)
+@modal.fastapi_endpoint(method="POST")
+def synthesize_speech_http(payload: dict):
+    import base64
+
+    audio_bytes = _synthesize_speech_bytes(
+        text=payload.get("text", ""),
+        voice=payload.get("voice", "af_bella"),
+        speed=float(payload.get("speed", 1.0)),
+    )
+    return {"audio_base64": base64.b64encode(audio_bytes).decode("ascii")}
 
 # ---------------------------------------------------------------------------
 # Serverless LLM / RAG Engine (vLLM)
@@ -303,7 +295,7 @@ def process_video_modal(
     gpu="A10G",
     volumes={"/models": rag_models_volume},
     scaledown_window=300,
-    keep_warm=1,
+    min_containers=1,
 )
 @modal.concurrent(max_inputs=100)
 @modal.web_server(8000, startup_timeout=900)
@@ -325,6 +317,57 @@ def vllm_server():
 # ---------------------------------------------------------------------------
 # API Gateway
 # ---------------------------------------------------------------------------
+def _install_modal_worker_handles():
+    import sys
+    import types
+
+    handles = types.ModuleType("app.modal_handles")
+    handles.MODAL_FUNCTIONS = {
+        "generate_image_modal": generate_image_modal,
+        "transcribe_audio_modal": transcribe_audio_modal,
+        "synthesize_speech_modal": synthesize_speech_modal,
+    }
+    sys.modules["app.modal_handles"] = handles
+
+
+def _get_modal_web_url(function):
+    web_url = getattr(function, "web_url", None)
+    if hasattr(web_url, "url"):
+        return web_url.url
+    get_web_url = getattr(function, "get_web_url", None)
+    if callable(get_web_url):
+        return get_web_url()
+    return str(web_url)
+
+
+def _install_modal_worker_urls():
+    import os
+
+    os.environ["MODAL_STT_URL"] = _get_modal_web_url(transcribe_audio_http)
+    os.environ["MODAL_TTS_URL"] = _get_modal_web_url(synthesize_speech_http)
+
+
+def _install_modal_enqueue_patch():
+    from app.models.job import Modality
+    from app.services.inference import InferenceService
+
+    def _enqueue_task_modal(self, job):
+        task_map = {
+            Modality.IMAGE.value: "workers.image_tasks.generate_image",
+            Modality.VOICE_STT.value: "workers.voice_tasks.transcribe_audio",
+            Modality.VOICE_TTS.value: "workers.voice_tasks.synthesize_speech",
+        }
+
+        task_name = task_map.get(job.modality)
+        if task_name is None:
+            raise ValueError(f"No task registered for modality: {job.modality}")
+
+        execute_celery_task_modal.spawn(task_name, str(job.id))
+        return str(job.id)
+
+    InferenceService._enqueue_task = _enqueue_task_modal
+
+
 @app.function(
     image=api_image,
     secrets=[
@@ -349,9 +392,12 @@ def api_gateway():
     os.environ["HF_HOME"] = CACHE_DIR
     
     # 3. Security
-    if "CORS_ORIGINS" not in os.environ:
-        os.environ["CORS_ORIGINS"] = '["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "https://lenai-gamma.vercel.app", "https://lenai-gamma.vercel.app/"]'
+    os.environ["CORS_ORIGINS"] = '["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "https://lenai-gamma.vercel.app", "https://lenai-gamma.vercel.app/"]'
     
+    _install_modal_worker_handles()
+    _install_modal_worker_urls()
+    _install_modal_enqueue_patch()
+
     from app.main import app as fastapi_app
     from fastapi.staticfiles import StaticFiles
     
@@ -378,12 +424,13 @@ def execute_celery_task_modal(task_name: str, job_id: str):
     """
     import os
     os.environ["RUNNING_IN_MODAL"] = "true"
+    _install_modal_worker_handles()
+    _install_modal_worker_urls()
     
     from app.workers.celery_app import celery_app
     # Ensure tasks are registered
     import app.workers.image_tasks
     import app.workers.voice_tasks
-    import app.workers.video_tasks
     
     task = celery_app.tasks.get(task_name)
     if not task:

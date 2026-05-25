@@ -1,6 +1,6 @@
 # LenAI — Production Media Inference API Platform
 
-A unified REST API that routes image, video, and voice inference requests to self-hosted models, with async job handling, webhook delivery, usage metering, and a developer playground.
+A unified REST API that routes image and voice inference requests to self-hosted models, with async job handling, webhook delivery, usage metering, and a developer playground.
 
 > **One-command deployment:** `cp .env.example .env && docker compose up`
 
@@ -69,8 +69,6 @@ ACID transactions guarantee job state integrity — a job cannot be "lost" betwe
 ### Why MinIO (not local filesystem)?
 S3-compatible presigned URLs with TTL prevent unauthorized access. No vendor lock-in — swap to AWS S3 with a config change. Runs in Docker for self-contained deployment.
 
-### Why this video approach (frame-based, not AnimateDiff)?
-**Honesty over hype.** Real video generation models require 24GB+ GPU memory. Our frame-based approach (FFmpeg extraction → SD img2img per frame → FFmpeg reassembly) is functional on CPU, reuses the existing SD model, and clearly documents its limitations (no temporal coherence). The README states this trade-off rather than faking capability.
 
 ### Why YAML model registry (not hardcoded endpoints)?
 Adding a new model = one YAML entry + restart. No code changes. The registry validates config at startup and provides health checking, input validation, and resource limits per model.
@@ -113,7 +111,7 @@ While the default setup runs locally via Docker Compose, LenAI is designed to be
 
 **Cloud Architecture Highlights:**
 - **Persistent Celery Worker:** A lightweight CPU container (`celery_worker_modal`) stays warm 24/7 on Modal, polling your Redis queue. This maintains the robust distributed queue architecture even in the cloud.
-- **Serverless GPUs:** When the Celery worker picks up a job, it proxies the heavy lifting to A10G Serverless containers (Stable Diffusion, Whisper, Kokoro, vLLM) that scale to zero when idle.
+- **Right-sized serverless workers:** Image generation and vLLM run on A10G GPU containers; Whisper and Kokoro run on CPU containers and scale down when idle.
 - **RAG Volume Caching:** Embedding models are proactively downloaded into a Modal Volume during deployment, ensuring instant document ingestion.
 
 ---
@@ -155,7 +153,7 @@ Open the playground at `http://localhost/playground` or via API:
 ```bash
 curl -X POST http://localhost/v1/api-keys \
   -H "Content-Type: application/json" \
-  -d '{"name": "test-key", "scopes": ["image", "voice_stt", "voice_tts", "video"]}'
+  -d '{"name": "test-key", "scopes": ["image", "voice_stt", "voice_tts"]}'
 ```
 
 ### 5. Submit an inference request
@@ -186,7 +184,7 @@ Requires NVIDIA Container Toolkit installed on the host.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/v1/infer/{modality}` | Submit inference job (image/voice_stt/voice_tts/video) |
+| `POST` | `/v1/infer/{modality}` | Submit inference job (image/voice_stt/voice_tts) |
 | `GET` | `/v1/jobs/{id}` | Poll job status and result |
 | `GET` | `/v1/jobs` | List jobs with pagination and filters |
 | `GET` | `/v1/jobs/dead-letter` | Query dead-letter queue |
@@ -256,7 +254,7 @@ Every error returns a consistent envelope:
 | OAuth2/OIDC auth | API keys are simpler for this scope | Add Auth0/Keycloak integration |
 | WebSocket real-time updates | Polling is more reliable for v1 | Add SSE or WebSocket for live progress |
 | Row-level security | Single-tenant is sufficient here | PostgreSQL RLS policies per tenant |
-| Real video generation | Requires 24GB+ GPU (AnimateDiff) | Add AnimateDiff model container |
+| Video generation | Removed to keep the platform focused on image, voice, text, and RAG | Add a dedicated video model container |
 | CI/CD pipeline | Time constraint | GitHub Actions for build/test/deploy |
 | Kubernetes manifests | Docker Compose for simplicity | Helm chart with HPA for autoscaling |
 | RAG retrieval evaluation | Would require curated test set | Fixed query→expected source test suite |

@@ -31,7 +31,7 @@ class ApiKey(UUIDMixin, TimestampMixin, Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
 
-    # Scopes: ["image", "video", "voice_stt", "voice_tts"]
+    # Scopes: ["image", "voice_stt", "voice_tts"]
     scopes: Mapped[List[str]] = mapped_column(
         ARRAY(String), nullable=False, default=list
     )

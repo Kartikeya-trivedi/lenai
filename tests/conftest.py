@@ -59,7 +59,7 @@ def mock_api_key(test_tenant_id, test_api_key_id):
     key.tenant_id = test_tenant_id
     key.key_prefix = "lenai_sk_test12"
     key.name = "test-key"
-    key.scopes = ["image", "voice_stt", "voice_tts", "video"]
+    key.scopes = ["image", "voice_stt", "voice_tts"]
     key.rate_limit_rpm = 60
     key.monthly_request_cap = 10000
     key.is_active = True

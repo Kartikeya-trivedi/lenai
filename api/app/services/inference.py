@@ -69,8 +69,14 @@ class InferenceService:
         await self.db.flush()
 
         # 4. Enqueue Celery task
-        task_id = self._enqueue_task(job)
         job.status = JobStatus.QUEUED.value
+        await self.db.flush()
+
+        import os
+        if os.getenv("RUNNING_IN_MODAL") == "true":
+            await self.db.commit()
+
+        task_id = self._enqueue_task(job)
 
         logger.info(
             "job_created",
@@ -120,7 +126,6 @@ class InferenceService:
             Modality.IMAGE.value: "workers.image_tasks.generate_image",
             Modality.VOICE_STT.value: "workers.voice_tasks.transcribe_audio",
             Modality.VOICE_TTS.value: "workers.voice_tasks.synthesize_speech",
-            Modality.VIDEO.value: "workers.video_tasks.process_video",
         }
 
         task_name = task_map.get(job.modality)
@@ -137,7 +142,7 @@ class InferenceService:
         result = celery_app.send_task(
             task_name,
             args=[str(job.id)],
-            queue=job.modality.split("_")[0],  # image, voice, video
+            queue=job.modality.split("_")[0],  # image or voice
         )
 
         return result.id

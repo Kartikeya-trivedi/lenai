@@ -49,7 +49,6 @@ WORKDIR /app
 # Install runtime system deps only
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        ffmpeg \
         libpq5 \
         curl \
         tini && \

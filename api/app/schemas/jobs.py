@@ -20,6 +20,7 @@ class JobResponse(BaseModel):
     progress: int = Field(ge=0, le=100)
     input_params: Optional[Dict[str, Any]] = None
     output_url: Optional[str] = None
+    output_data: Optional[Dict[str, Any]] = None
     output_url_expires_at: Optional[datetime] = None
     error_message: Optional[str] = None
     webhook_url: Optional[str] = None

@@ -7,6 +7,40 @@ const api = axios.create({
   baseURL: API_BASE_URL,
 });
 
+const extractTranscript = (job) => {
+  const data = job?.output_data;
+  if (!data) return '';
+  if (typeof data === 'string') return data.trim();
+  if (typeof data.text === 'string') return data.text.trim();
+  if (typeof data.transcript === 'string') return data.transcript.trim();
+  if (Array.isArray(data.segments)) {
+    return data.segments
+      .map(segment => segment?.text)
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+  }
+  return '';
+};
+
+const fetchTranscriptFromUrl = async (url) => {
+  if (!url) return '';
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return '';
+
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      return extractTranscript({ output_data: await res.json() });
+    }
+
+    return (await res.text()).trim();
+  } catch {
+    return '';
+  }
+};
+
 // Guarantee headers are injected on every request
 api.interceptors.request.use(config => {
   const key = localStorage.getItem('lenai_api_key') || import.meta.env.VITE_API_KEY;
@@ -49,7 +83,9 @@ export const ApiClient = {
     formData.append('file', file);
     
     const res = await api.post('/v1/infer/voice_stt', formData);
-    return this.pollJob(res.data.job_id);
+    const job = await this.pollJob(res.data.job_id);
+    const transcript = extractTranscript(job) || (await fetchTranscriptFromUrl(job.output_url));
+    return { ...job, transcript };
   },
 
   async pollJob(jobId) {

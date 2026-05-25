@@ -32,7 +32,6 @@ celery_app.conf.update(
     task_routes={
         "workers.image_tasks.*": {"queue": "image"},
         "workers.voice_tasks.*": {"queue": "voice"},
-        "workers.video_tasks.*": {"queue": "video"},
         "workers.webhook_tasks.*": {"queue": "webhook"},
         "workers.cleanup_tasks.*": {"queue": "cleanup"},
     },
@@ -79,7 +78,6 @@ celery_app.autodiscover_tasks(
     [
         "app.workers.image_tasks",
         "app.workers.voice_tasks",
-        "app.workers.video_tasks",
         "app.workers.webhook_tasks",
         "app.workers.cleanup_tasks",
     ],

@@ -50,7 +50,7 @@ async def get_current_api_key(
                 self.tenant_id = uuid.uuid4()
                 self.key_prefix = "demo_key"
                 self.name = "demo"
-                self.scopes = ["image", "voice_stt", "voice_tts", "video"]
+                self.scopes = ["image", "voice_stt", "voice_tts"]
                 self.is_active = True
                 self.rate_limit_rpm = 9999
                 self.monthly_request_cap = 99999

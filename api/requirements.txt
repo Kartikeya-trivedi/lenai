@@ -29,7 +29,6 @@ passlib[bcrypt]>=1.7.4
 # File Handling
 python-multipart>=0.0.9
 pillow>=10.0
-ffmpeg-python>=0.2.0
 
 # Logging
 structlog>=24.0

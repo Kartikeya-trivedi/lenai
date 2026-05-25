@@ -24,7 +24,7 @@ def upgrade() -> None:
         create_type=False,
     )
     modality_enum = postgresql.ENUM(
-        "image", "video", "voice_stt", "voice_tts",
+        "image", "voice_stt", "voice_tts",
         name="modality",
         create_type=False,
     )
@@ -33,7 +33,7 @@ def upgrade() -> None:
     op.execute("DROP TYPE IF EXISTS jobstatus")
     op.execute("CREATE TYPE jobstatus AS ENUM ('pending', 'queued', 'processing', 'completed', 'failed', 'dead_letter')")
     op.execute("DROP TYPE IF EXISTS modality")
-    op.execute("CREATE TYPE modality AS ENUM ('image', 'video', 'voice_stt', 'voice_tts')")
+    op.execute("CREATE TYPE modality AS ENUM ('image', 'voice_stt', 'voice_tts')")
 
     # ── api_keys table ─────────────────────────────────────────
     op.create_table(

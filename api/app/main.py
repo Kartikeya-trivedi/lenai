@@ -75,7 +75,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="LenAI Media Inference API",
         description=(
-            "Unified REST API for image, video, and voice inference "
+            "Unified REST API for image and voice inference "
             "with async job handling, webhook delivery, and usage metering."
         ),
         version="1.0.0",

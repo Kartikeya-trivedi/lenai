@@ -106,11 +106,6 @@
                         <span class="modality-name">Text → Speech</span>
                         <span class="modality-desc">Voice synthesis</span>
                     </button>
-                    <button class="modality-card" data-modality="video" onclick="selectModality('video')">
-                        <span class="modality-icon">🎬</span>
-                        <span class="modality-name">Video</span>
-                        <span class="modality-desc">Style transfer</span>
-                    </button>
                     <button class="modality-card" data-modality="rag" onclick="selectModality('rag')">
                         <span class="modality-icon">🧠</span>
                         <span class="modality-name">RAG</span>
@@ -215,30 +210,6 @@
                                 <div class="form-field">
                                     <label for="tts-speed">Speed: <span id="speed-value">1.0</span>x</label>
                                     <input type="range" id="tts-speed" name="speed" min="0.5" max="2" step="0.1" value="1" oninput="document.getElementById('speed-value').textContent=this.value">
-                                </div>
-                            </div>
-
-                            <!-- Video params -->
-                            <div id="params-video" class="param-group hidden">
-                                <div class="form-field">
-                                    <label for="vid-prompt">Style Prompt</label>
-                                    <textarea id="vid-prompt" name="prompt" rows="3" placeholder="Apply watercolor painting style..."></textarea>
-                                </div>
-                                <div class="form-field">
-                                    <label>Source File</label>
-                                    <div class="drop-zone" id="vid-dropzone">
-                                        <input type="file" id="vid-file" name="file" accept="video/*,image/*" class="file-input" onchange="handleFileSelect(this)">
-                                        <div class="drop-zone-content">
-                                            <span class="drop-icon">🎬</span>
-                                            <p>Drag & drop video or image or <span class="link">browse</span></p>
-                                            <p class="drop-hint">MP4, AVI, MOV, PNG, JPG (max 100MB)</p>
-                                        </div>
-                                        <div class="drop-zone-preview hidden" id="vid-preview">
-                                            <span class="file-icon">📎</span>
-                                            <span class="file-name" id="vid-filename"></span>
-                                            <button type="button" class="btn-icon" onclick="clearFile('vid')">✕</button>
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
 

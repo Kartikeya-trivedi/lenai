@@ -73,7 +73,7 @@ services:
 # api/model_registry.yaml
 models:
   my-new-model:
-    modality: custom_modality    # or existing: image, voice_stt, voice_tts, video
+    modality: custom_modality    # or existing: image, voice_stt, voice_tts
     endpoint: http://my-new-model:8890
     health_check: /health
     input_schema:
@@ -91,7 +91,7 @@ models:
 
 ### Step 4: Add Celery Task (new modality only)
 
-If this is a **new modality** (not image/voice_stt/voice_tts/video), create a new task file:
+If this is a **new modality** (not image/voice_stt/voice_tts), create a new task file:
 
 ```python
 # api/app/workers/custom_tasks.py

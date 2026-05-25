@@ -69,6 +69,11 @@ function App() {
     );
   }
 
+  const handleTranscribeAudio = async (file) => {
+    const response = await ApiClient.transcribeAudio(file);
+    return response.transcript || '';
+  };
+
   const handleFileUpload = async (file, isAudio = false) => {
     if (!file) return;
 
@@ -85,15 +90,12 @@ function App() {
 
       try {
         const response = await ApiClient.transcribeAudio(file);
+        const transcript = response.transcript || 'No transcript text was returned.';
         
-        // Wait for the job to complete or use the result if immediate
-        // In transcribeAudio, it returns the job status object
-        // The transcript text is usually stored in the output url, or directly in the completed job metadata depending on backend implementation.
-        // Assuming the backend stores transcript URL in response.output_url
         setMessages(prev => prev.map(msg => 
           msg.id === botMsgId ? { 
             ...msg, 
-            content: `Transcription complete! [View Transcript JSON](${response.output_url})`, 
+            content: transcript, 
             status: 'completed' 
           } : msg
         ));
@@ -258,7 +260,13 @@ function App() {
                 </h1>
                 
                 <div className="w-full relative z-10">
-                  <OmniInput onSubmit={handleSubmit} onFileUpload={handleFileUpload} isLoading={isLoading} centered={true} />
+                  <OmniInput
+                    onSubmit={handleSubmit}
+                    onFileUpload={handleFileUpload}
+                    onTranscribeAudio={handleTranscribeAudio}
+                    isLoading={isLoading}
+                    centered={true}
+                  />
                 </div>
               </motion.div>
             ) : (
@@ -282,9 +290,15 @@ function App() {
 
                 {/* Bottom Input Area */}
                 <div className="w-full max-w-3xl px-6 pb-6 pt-2 bg-gradient-to-t from-background via-background to-transparent relative z-10">
-                  <OmniInput onSubmit={handleSubmit} onFileUpload={handleFileUpload} isLoading={isLoading} centered={false} />
+                  <OmniInput
+                    onSubmit={handleSubmit}
+                    onFileUpload={handleFileUpload}
+                    onTranscribeAudio={handleTranscribeAudio}
+                    isLoading={isLoading}
+                    centered={false}
+                  />
                   <div className="text-center mt-3 text-[11px] text-slate-500 font-medium">
-                    LenAI can generate images, voice, video, and text.
+                    LenAI can generate images, voice, and text.
                   </div>
                 </div>
               </motion.div>

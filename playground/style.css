@@ -648,12 +648,6 @@ label {
     margin: 12px 0;
 }
 
-.result-video {
-    width: 100%;
-    border-radius: var(--radius-md);
-    margin: 12px 0;
-}
-
 .result-json {
     background: var(--bg-tertiary);
     border-radius: var(--radius-md);

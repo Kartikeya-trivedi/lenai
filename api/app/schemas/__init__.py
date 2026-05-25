@@ -3,7 +3,6 @@ from app.schemas.common import ErrorResponse, HealthResponse, PaginatedResponse,
 from app.schemas.inference import (
     ImageGenerationRequest,
     InferenceResponse,
-    VideoRequest,
     VoiceSTTRequest,
     VoiceTTSRequest,
 )

@@ -44,7 +44,7 @@ echo "🚀 Starting Celery worker..."
 exec celery -A app.workers.celery_app worker \
     --loglevel="${LOG_LEVEL:-info}" \
     --concurrency="${CELERY_CONCURRENCY:-2}" \
-    -Q image,voice,video,webhook,cleanup \
+    -Q image,voice,webhook,cleanup \
     --without-gossip \
     --without-mingle \
     --without-heartbeat \
