@@ -3,12 +3,14 @@ import { ApiClient } from './ApiClient';
 import MessageBubble from './components/MessageBubble';
 import OmniInput from './components/OmniInput';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, FileText, Upload } from 'lucide-react';
 
 function App() {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const feedRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -19,6 +21,32 @@ function App() {
       });
     }
   }, [messages]);
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const text = await file.text();
+      const res = await ApiClient.ingestDocument(text, file.name);
+      
+      const botMsgId = Date.now().toString();
+      setMessages(prev => [...prev, { 
+        id: botMsgId, 
+        role: 'assistant', 
+        content: `Successfully ingested document: **${file.name}** (${res.chunks} chunks embedded and stored in Qdrant!)`, 
+        modality: 'chat',
+        status: 'completed' 
+      }]);
+    } catch (err) {
+      console.error(err);
+      alert(`Failed to upload document: ${err.message}`);
+    } finally {
+      setIsUploading(false);
+      e.target.value = null; // reset input
+    }
+  };
 
   const handleSubmit = async (text, modality) => {
     // 1. Add user message
@@ -38,7 +66,7 @@ function App() {
     setIsLoading(true);
 
     try {
-      if (modality === 'text') {
+      if (modality === 'text' || modality === 'chat') {
         const response = await ApiClient.chat(text);
         setMessages(prev => prev.map(msg => 
           msg.id === botMsgId ? { ...msg, content: response.answer, status: 'completed' } : msg
@@ -99,9 +127,27 @@ function App() {
             LenAI Omni
           </h1>
         </div>
-        <div className="ml-auto flex items-center gap-3 glass-panel px-3 py-1.5 rounded-full">
-          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse-slow shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
-          <span className="text-xs text-emerald-400 font-semibold tracking-widest uppercase">Systems Online</span>
+        <div className="ml-auto flex items-center gap-4">
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleFileUpload} 
+            accept=".txt,.md,.csv" 
+            className="hidden" 
+          />
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className="flex items-center gap-2 glass-panel hover:bg-white/10 transition-colors px-4 py-1.5 rounded-full text-sm font-medium text-slate-300 disabled:opacity-50"
+          >
+            {isUploading ? <Upload size={14} className="animate-bounce" /> : <FileText size={14} />}
+            <span>{isUploading ? 'Ingesting...' : 'Add Document'}</span>
+          </button>
+          
+          <div className="flex items-center gap-3 glass-panel px-3 py-1.5 rounded-full">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse-slow shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
+            <span className="text-xs text-emerald-400 font-semibold tracking-widest uppercase">Systems Online</span>
+          </div>
         </div>
       </header>
 

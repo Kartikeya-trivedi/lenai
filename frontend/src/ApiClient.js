@@ -61,5 +61,14 @@ export const ApiClient = {
       };
       setTimeout(poll, 1000);
     });
+  },
+
+  async ingestDocument(text, source) {
+    const res = await api.post('/v1/rag/ingest', {
+      text,
+      source,
+      metadata: { uploaded_via: 'frontend' }
+    });
+    return res.data;
   }
 };
