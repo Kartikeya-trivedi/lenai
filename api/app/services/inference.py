@@ -129,16 +129,9 @@ class InferenceService:
 
         import os
         if os.getenv("RUNNING_IN_MODAL") == "true":
-            try:
-                import sys
-                if "/root" not in sys.path:
-                    sys.path.append("/root")
-                import modal_app
-                worker_fn = modal_app.execute_celery_task_modal
-            except ImportError:
-                import modal
-                worker_fn = modal.Function.from_name("lenai-platform", "execute_celery_task_modal")
-            worker_fn.spawn(task_name, job.id)
+            import modal
+            worker_fn = modal.Function.from_name("lenai-platform", "execute_celery_task_modal")
+            worker_fn.spawn(task_name, str(job.id))
             return str(job.id) # Use job_id as task_id in Modal
             
         result = celery_app.send_task(

@@ -76,15 +76,8 @@ def transcribe_audio(self, job_id: str):
         # 2. Send to Whisper ASR
         import os
         if os.getenv("RUNNING_IN_MODAL") == "true":
-            try:
-                import sys
-                if "/root" not in sys.path:
-                    sys.path.append("/root")
-                import modal_app
-                f = modal_app.transcribe_audio_modal
-            except ImportError:
-                import modal
-                f = modal.Function.from_name("lenai-platform", "transcribe_audio_modal")
+            import modal
+            f = modal.Function.from_name("lenai-platform", "transcribe_audio_modal")
             transcript = f.remote(audio_data, params.get("language"))
             _update_job_status(job_id, "processing", progress=70)
         else:
@@ -236,15 +229,8 @@ def synthesize_speech(self, job_id: str):
         # 2. Call Kokoro API or Modal Function
         import os
         if os.getenv("RUNNING_IN_MODAL") == "true":
-            try:
-                import sys
-                if "/root" not in sys.path:
-                    sys.path.append("/root")
-                import modal_app
-                f = modal_app.synthesize_speech_modal
-            except ImportError:
-                import modal
-                f = modal.Function.from_name("lenai-platform", "synthesize_speech_modal")
+            import modal
+            f = modal.Function.from_name("lenai-platform", "synthesize_speech_modal")
             audio_data = f.remote(
                 text=params.get("text", ""),
                 voice=params.get("voice", "af_bella"),

@@ -97,15 +97,8 @@ def process_video(self, job_id: str):
 
         import os
         if os.getenv("RUNNING_IN_MODAL") == "true":
-            try:
-                import sys
-                if "/root" not in sys.path:
-                    sys.path.append("/root")
-                import modal_app
-                f = modal_app.process_video_modal
-            except ImportError:
-                import modal
-                f = modal.Function.from_name("lenai-platform", "process_video_modal")
+            import modal
+            f = modal.Function.from_name("lenai-platform", "process_video_modal")
             video_data = f.remote(
                 source_data=source_data,
                 source_ext=ext,
