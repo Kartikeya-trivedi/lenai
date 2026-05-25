@@ -97,10 +97,18 @@ class RAGPipeline:
 
         # ── 2. Hybrid retrieval ────────────────────────────────
         retrieval_start = time.monotonic()
-        candidates = await self.retriever.retrieve(
-            query=question,
-            top_k=top_k,
-        )
+        try:
+            candidates = await self.retriever.retrieve(
+                query=question,
+                top_k=top_k,
+            )
+        except Exception as exc:
+            logger.warning(
+                "rag_retrieval_failed_falling_back",
+                query=question[:50],
+                error=str(exc),
+            )
+            candidates = []
         retrieval_ms = round((time.monotonic() - retrieval_start) * 1000)
 
         if not candidates:

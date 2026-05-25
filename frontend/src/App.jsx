@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ApiClient } from './ApiClient';
+import { ApiClient, clearApiKey, getActiveApiKey, saveApiKey } from './ApiClient';
 import MessageBubble from './components/MessageBubble';
 import OmniInput from './components/OmniInput';
 import Dashboard from './components/Dashboard';
@@ -9,10 +9,48 @@ import { Sparkles, Key, Terminal, LayoutDashboard } from 'lucide-react';
 function App() {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('lenai_api_key') || import.meta.env.VITE_API_KEY || '');
-  const [isAuthenticated, setIsAuthenticated] = useState(() => !!(localStorage.getItem('lenai_api_key') || import.meta.env.VITE_API_KEY));
+  const [apiKey, setApiKey] = useState(() => getActiveApiKey());
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(() => !!getActiveApiKey());
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [authError, setAuthError] = useState('');
   const [activeTab, setActiveTab] = useState('playground'); // 'playground' | 'dashboard'
   const feedRef = useRef(null);
+
+  useEffect(() => {
+    const key = getActiveApiKey();
+    if (!key) {
+      setIsCheckingAuth(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    ApiClient.validateApiKey(key)
+      .then(() => {
+        if (!cancelled) {
+          setIsAuthenticated(true);
+          setAuthError('');
+        }
+      })
+      .catch(() => {
+        clearApiKey();
+        if (!cancelled) {
+          setApiKey('');
+          setIsAuthenticated(false);
+          setAuthError('Saved API key is invalid or expired. Enter a valid key to continue.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsCheckingAuth(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -23,6 +61,44 @@ function App() {
       });
     }
   }, [messages]);
+
+  const handleConnect = async (e) => {
+    e.preventDefault();
+
+    const candidate = apiKey.trim();
+    if (!candidate) return;
+
+    setIsConnecting(true);
+    setAuthError('');
+
+    try {
+      await ApiClient.validateApiKey(candidate);
+      saveApiKey(candidate);
+      setIsAuthenticated(true);
+    } catch (error) {
+      clearApiKey();
+      const status = error?.response?.status;
+      const detail = error?.response?.data?.error?.message || error?.response?.data?.detail;
+      setAuthError(
+        status === 401
+          ? 'Invalid API key. Check the key and try again.'
+          : detail || 'Could not validate this API key. Try again in a moment.'
+      );
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  if (isCheckingAuth) {
+    return (
+      <div className="flex flex-col h-screen bg-background items-center justify-center p-4">
+        <div className="flex items-center gap-3 text-slate-300 text-sm">
+          <Sparkles size={18} className="text-indigo-400 animate-pulse" />
+          Checking API key...
+        </div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
@@ -39,13 +115,7 @@ function App() {
           <p className="text-slate-400 text-sm mb-8">Enter your API key to access the media inference platform.</p>
           
           <form 
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (apiKey.trim()) {
-                localStorage.setItem('lenai_api_key', apiKey.trim());
-                setIsAuthenticated(true);
-              }
-            }}
+            onSubmit={handleConnect}
             className="w-full"
           >
             <input 
@@ -56,12 +126,18 @@ function App() {
               className="w-full bg-[#1e1e1e] border border-border rounded-xl px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 mb-4 transition-colors"
               autoFocus
             />
+            {authError && (
+              <p className="text-sm text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-xl px-3 py-2 mb-4 text-left">
+                {authError}
+              </p>
+            )}
             <button 
               type="submit"
-              disabled={!apiKey.trim()}
-              className="w-full bg-white text-black font-semibold rounded-xl py-3 hover:bg-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!apiKey.trim() || isConnecting}
+              className="w-full bg-white text-black font-semibold rounded-xl py-3 hover:bg-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              Connect
+              <Key size={16} />
+              {isConnecting ? 'Checking...' : 'Connect'}
             </button>
           </form>
         </motion.div>
@@ -187,7 +263,11 @@ function App() {
       console.error(error);
       let errorMsg = error?.message || 'Unknown error';
       if (error?.response?.status === 401) {
-        errorMsg = 'Authentication failed — invalid or missing API key. Please sign out and re-enter a valid key.';
+        clearApiKey();
+        setApiKey('');
+        setIsAuthenticated(false);
+        setAuthError('Authentication failed. Enter a valid API key to continue.');
+        errorMsg = 'Authentication failed - invalid or missing API key. Please sign out and re-enter a valid key.';
       } else if (error?.response?.data?.detail) {
         errorMsg = error.response.data.detail;
       }
@@ -198,8 +278,6 @@ function App() {
       setIsLoading(false);
     }
   };
-
-  const isEmpty = messages.length === 0;
 
   return (
     <div className="flex h-screen bg-background font-sans overflow-hidden">
@@ -231,7 +309,9 @@ function App() {
         <div className="mt-auto pt-4 border-t border-border px-2">
           <button 
             onClick={() => {
-              localStorage.removeItem('lenai_api_key');
+              clearApiKey();
+              setApiKey('');
+              setAuthError('');
               setIsAuthenticated(false);
             }}
             className="flex items-center gap-2 text-xs text-rose-400 hover:text-rose-300 font-medium"

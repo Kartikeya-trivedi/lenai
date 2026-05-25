@@ -7,6 +7,12 @@ const api = axios.create({
   baseURL: API_BASE_URL,
 });
 
+export const getSavedApiKey = () => localStorage.getItem('lenai_api_key') || '';
+export const getConfiguredApiKey = () => import.meta.env.VITE_API_KEY || '';
+export const getActiveApiKey = () => getSavedApiKey() || getConfiguredApiKey();
+export const saveApiKey = (key) => localStorage.setItem('lenai_api_key', key);
+export const clearApiKey = () => localStorage.removeItem('lenai_api_key');
+
 const extractTranscript = (job) => {
   const data = job?.output_data;
   if (!data) return '';
@@ -43,14 +49,35 @@ const fetchTranscriptFromUrl = async (url) => {
 
 // Guarantee headers are injected on every request
 api.interceptors.request.use(config => {
-  const key = localStorage.getItem('lenai_api_key') || import.meta.env.VITE_API_KEY;
-  if (key) {
-    config.headers['X-API-Key'] = key;
+  const hasExplicitKey =
+    config.headers?.['X-API-Key'] || config.headers?.get?.('X-API-Key');
+  const key = getActiveApiKey();
+
+  if (!hasExplicitKey && key) {
+    if (config.headers?.set) {
+      config.headers.set('X-API-Key', key);
+    } else {
+      config.headers = { ...config.headers, 'X-API-Key': key };
+    }
   }
+
   return config;
 });
 
 export const ApiClient = {
+  async validateApiKey(key) {
+    const candidate = key?.trim();
+    if (!candidate) {
+      throw new Error('Enter an API key.');
+    }
+
+    await api.get('/v1/api-keys', {
+      headers: { 'X-API-Key': candidate },
+    });
+
+    return true;
+  },
+
   async chat(prompt) {
     const res = await api.post('/v1/rag/query', { question: prompt });
     return res.data;

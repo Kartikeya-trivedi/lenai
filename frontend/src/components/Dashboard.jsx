@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ApiClient } from '../ApiClient';
 import { Key, Activity, BarChart, AlertCircle, Copy, Check, Trash2, Plus, Clock } from 'lucide-react';
-import { motion } from 'framer-motion';
 
 export default function Dashboard() {
   const [usage, setUsage] = useState(null);
@@ -11,24 +10,49 @@ export default function Dashboard() {
   const [creatingKey, setCreatingKey] = useState(false);
   const [copiedKey, setCopiedKey] = useState(null);
   const [newlyCreatedKey, setNewlyCreatedKey] = useState(null);
+  const [loadError, setLoadError] = useState('');
+  const fetchSeqRef = useRef(0);
 
   useEffect(() => {
     fetchData();
   }, []);
 
   const fetchData = async () => {
+    const fetchSeq = fetchSeqRef.current + 1;
+    fetchSeqRef.current = fetchSeq;
     setIsLoading(true);
+    setLoadError('');
+
     try {
-      const [usageData, keysData] = await Promise.all([
+      const [usageResult, keysResult] = await Promise.allSettled([
         ApiClient.getUsage(30),
         ApiClient.getApiKeys()
       ]);
-      setUsage(usageData);
-      setApiKeys(keysData);
-    } catch (err) {
-      console.error("Failed to fetch dashboard data:", err);
+
+      if (fetchSeq !== fetchSeqRef.current) return;
+
+      const failed = [];
+      if (usageResult.status === 'fulfilled') {
+        setUsage(usageResult.value);
+      } else {
+        failed.push('usage');
+        console.error("Failed to fetch usage data:", usageResult.reason);
+      }
+
+      if (keysResult.status === 'fulfilled') {
+        setApiKeys(keysResult.value);
+      } else {
+        failed.push('API keys');
+        console.error("Failed to fetch API keys:", keysResult.reason);
+      }
+
+      if (failed.length > 0) {
+        setLoadError(`Could not load ${failed.join(' and ')}. Check the API key and try again.`);
+      }
     } finally {
-      setIsLoading(false);
+      if (fetchSeq === fetchSeqRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -78,6 +102,13 @@ export default function Dashboard() {
     );
   }
 
+  const modalityRows = Array.isArray(usage?.by_modality) ? usage.by_modality : [];
+  const totalRequests = usage?.summary?.total_requests || 0;
+  const totalErrors = usage?.summary?.total_errors || 0;
+  const avgLatencyMs = totalRequests > 0
+    ? Math.round((usage?.summary?.total_compute_ms || 0) / totalRequests)
+    : 0;
+
   return (
     <div className="flex-1 overflow-y-auto p-8 max-w-6xl mx-auto w-full">
       
@@ -93,20 +124,20 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-12">
         <div className="bg-panel border border-border p-6 rounded-2xl flex flex-col">
           <span className="text-slate-400 text-sm font-medium mb-1 flex items-center gap-2"><BarChart size={16}/> Total Requests</span>
-          <span className="text-3xl font-bold text-white">{usage?.summary?.total_requests || 0}</span>
+          <span className="text-3xl font-bold text-white">{totalRequests}</span>
         </div>
         <div className="bg-panel border border-border p-6 rounded-2xl flex flex-col">
           <span className="text-slate-400 text-sm font-medium mb-1 flex items-center gap-2"><AlertCircle size={16}/> Error Rate</span>
           <span className="text-3xl font-bold text-rose-400">
-            {usage?.summary?.total_requests > 0 
-              ? ((usage.summary.total_errors / usage.summary.total_requests) * 100).toFixed(1) 
+            {totalRequests > 0
+              ? ((totalErrors / totalRequests) * 100).toFixed(1)
               : 0}%
           </span>
         </div>
         <div className="bg-panel border border-border p-6 rounded-2xl flex flex-col">
           <span className="text-slate-400 text-sm font-medium mb-1 flex items-center gap-2"><Clock size={16}/> Avg Latency</span>
           <span className="text-3xl font-bold text-emerald-400">
-            {usage?.summary?.avg_latency_ms ? Math.round(usage.summary.avg_latency_ms) : 0}ms
+            {avgLatencyMs}ms
           </span>
         </div>
         <div className="bg-panel border border-border p-6 rounded-2xl flex flex-col">
@@ -123,6 +154,11 @@ export default function Dashboard() {
             <Key className="text-purple-400" size={20} />
             API Keys
           </h2>
+          {loadError && (
+            <div className="bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-xl px-4 py-3 text-sm">
+              {loadError}
+            </div>
+          )}
           
           <div className="bg-panel border border-border rounded-2xl overflow-hidden">
             <div className="p-4 border-b border-border bg-black/20">
@@ -206,19 +242,19 @@ export default function Dashboard() {
             Usage by Modality
           </h2>
           <div className="bg-panel border border-border rounded-2xl p-4 flex flex-col gap-3">
-            {Object.keys(usage?.by_modality || {}).length === 0 ? (
+            {modalityRows.length === 0 ? (
               <div className="p-8 text-center text-slate-500 text-sm">No usage data yet.</div>
             ) : (
-              Object.entries(usage.by_modality).map(([mod, stats]) => (
-                <div key={mod} className="flex flex-col gap-1.5 p-3 rounded-xl bg-black/20 border border-border/50">
+              modalityRows.map((stats) => (
+                <div key={stats.modality} className="flex flex-col gap-1.5 p-3 rounded-xl bg-black/20 border border-border/50">
                   <div className="flex justify-between items-center">
-                    <span className="font-semibold text-slate-200 capitalize">{mod.replace('_', ' ')}</span>
-                    <span className="text-sm font-bold text-white">{stats.requests} reqs</span>
+                    <span className="font-semibold text-slate-200 capitalize">{stats.modality.replace('_', ' ')}</span>
+                    <span className="text-sm font-bold text-white">{stats.request_count} reqs</span>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-slate-400">
                     <span className="flex items-center gap-1"><Clock size={12}/> {Math.round(stats.avg_latency_ms)}ms</span>
                     <span>•</span>
-                    <span className="flex items-center gap-1 text-rose-400"><AlertCircle size={12}/> {stats.errors} errs</span>
+                    <span className="flex items-center gap-1 text-rose-400"><AlertCircle size={12}/> {stats.error_count} errs</span>
                   </div>
                 </div>
               ))
