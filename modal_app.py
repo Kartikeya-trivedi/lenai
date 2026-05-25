@@ -161,7 +161,7 @@ def vllm_server():
 
 @app.function(
     image=api_image,
-    # secrets=[modal.Secret.from_name("lenai-db-secret")], # Commented out so deployment passes without DB
+    secrets=[modal.Secret.from_name("lenai-db-secret")],
     volumes={"/models": rag_models_volume} # Mount RAG embedding models
 )
 @modal.asgi_app()
@@ -172,7 +172,6 @@ def api_gateway():
     os.environ["VLLM_API_URL"] = vllm_server.web_url.url if hasattr(vllm_server.web_url, 'url') else getattr(vllm_server, "get_web_url", lambda: vllm_server.web_url)()
     os.environ["EMBEDDING_MODEL"] = "/models/multilingual-e5-large"
     os.environ["RERANKER_MODEL"] = "/models/ms-marco-MiniLM-L-6-v2"
-    os.environ["SKIP_AUTH"] = "true"  # Bypass API key validation (no DB)
     os.environ["CORS_ORIGINS"] = '["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000"]'
     
     from app.main import app as fastapi_app

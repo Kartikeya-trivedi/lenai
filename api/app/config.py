@@ -29,6 +29,13 @@ class Settings(BaseSettings):
     POSTGRES_DB: str = "lenai"
     DATABASE_URL: str = "postgresql+asyncpg://lenai:changeme@postgres:5432/lenai"
 
+    @field_validator("DATABASE_URL", mode="after")
+    @classmethod
+    def enforce_asyncpg(cls, v: str) -> str:
+        if v.startswith("postgresql://"):
+            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
+
     # ── Redis ───────────────────────────────────────────────────
     REDIS_URL: str = "redis://redis:6379/0"
 
