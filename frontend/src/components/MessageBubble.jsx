@@ -9,18 +9,18 @@ export default function MessageBubble({ role, content, modality, mediaUrl, statu
   const isUser = role === 'user';
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
       className={`flex w-full mb-6 ${isUser ? 'justify-end' : 'justify-start'}`}
     >
-      <div className={`flex max-w-[85%] md:max-w-[75%] ${isUser ? 'flex-row-reverse' : 'flex-row'} items-start gap-4`}>
+      <div className={`flex max-w-[96%] min-w-0 sm:max-w-[85%] md:max-w-[75%] ${isUser ? 'flex-row-reverse' : 'flex-row'} items-start gap-2 sm:gap-4`}>
         <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center shadow-lg ${isUser ? 'bg-gradient-to-br from-indigo-500 to-purple-600' : 'bg-slate-800 border border-slate-700'}`}>
           {isUser ? <User size={16} className="text-white" /> : <Bot size={16} className="text-indigo-400" />}
         </div>
         
-        <div className={`glass-panel p-5 rounded-2xl ${isUser ? 'rounded-tr-sm bg-indigo-900/30' : 'rounded-tl-sm'}`}>
+        <div className={`glass-panel min-w-0 max-w-full break-words p-4 rounded-2xl sm:p-5 ${isUser ? 'rounded-tr-sm bg-indigo-900/30' : 'rounded-tl-sm'}`}>
           {status === 'processing' && (
             <div className="flex items-center gap-3 text-indigo-400">
               <Loader2 className="animate-spin" size={18} />
@@ -29,7 +29,7 @@ export default function MessageBubble({ role, content, modality, mediaUrl, statu
           )}
           
           {content && (
-            <div className="prose prose-invert max-w-none text-sm leading-relaxed">
+            <div className="prose prose-invert max-w-none break-words text-sm leading-relaxed">
               <ReactMarkdown
                 components={{
                   code({node, inline, className, children, ...props}) {

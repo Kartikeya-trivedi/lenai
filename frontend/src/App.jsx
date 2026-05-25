@@ -17,6 +17,13 @@ function App() {
   const [activeTab, setActiveTab] = useState('playground'); // 'playground' | 'dashboard'
   const feedRef = useRef(null);
 
+  const handleSignOut = () => {
+    clearApiKey();
+    setApiKey('');
+    setAuthError('');
+    setIsAuthenticated(false);
+  };
+
   useEffect(() => {
     const key = getActiveApiKey();
     if (!key) {
@@ -280,10 +287,42 @@ function App() {
   };
 
   return (
-    <div className="flex h-screen bg-background font-sans overflow-hidden">
+    <div className="flex h-[100dvh] min-h-0 flex-col bg-background font-sans overflow-hidden md:flex-row">
+      {/* Mobile Navigation */}
+      <header className="flex-shrink-0 border-b border-border bg-panel/95 px-3 pb-3 pt-3 md:hidden">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-indigo-500/30 bg-indigo-500/20">
+              <Sparkles size={18} className="text-indigo-400" />
+            </div>
+            <span className="truncate text-lg font-bold tracking-wide text-white">LenAI</span>
+          </div>
+          <button
+            onClick={handleSignOut}
+            className="flex-shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-rose-400 hover:bg-rose-400/10 hover:text-rose-300"
+          >
+            Sign Out
+          </button>
+        </div>
+
+        <nav className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => setActiveTab('playground')}
+            className={`flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-medium transition-colors ${activeTab === 'playground' ? 'bg-white/10 text-white' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'}`}
+          >
+            <Terminal size={17} /> Playground
+          </button>
+          <button
+            onClick={() => setActiveTab('dashboard')}
+            className={`flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-medium transition-colors ${activeTab === 'dashboard' ? 'bg-white/10 text-white' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'}`}
+          >
+            <LayoutDashboard size={17} /> Dashboard
+          </button>
+        </nav>
+      </header>
       
       {/* Sidebar Navigation */}
-      <div className="w-64 border-r border-border bg-panel flex flex-col p-4">
+      <div className="hidden w-64 flex-shrink-0 border-r border-border bg-panel p-4 md:flex md:flex-col">
         <div className="flex items-center gap-3 mb-8 px-2">
           <div className="w-8 h-8 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
             <Sparkles size={18} className="text-indigo-400" />
@@ -308,12 +347,7 @@ function App() {
 
         <div className="mt-auto pt-4 border-t border-border px-2">
           <button 
-            onClick={() => {
-              clearApiKey();
-              setApiKey('');
-              setAuthError('');
-              setIsAuthenticated(false);
-            }}
+            onClick={handleSignOut}
             className="flex items-center gap-2 text-xs text-rose-400 hover:text-rose-300 font-medium"
           >
             Sign Out
@@ -325,7 +359,7 @@ function App() {
       {activeTab === 'dashboard' ? (
         <Dashboard />
       ) : (
-        <div className="flex-1 flex flex-col h-full items-center relative overflow-hidden">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col items-center overflow-hidden">
           <AnimatePresence>
             {messages.length === 0 ? (
               <motion.div 
@@ -333,9 +367,9 @@ function App() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20, filter: 'blur(10px)' }}
-                className="flex-1 flex flex-col items-center justify-center w-full max-w-3xl px-6 pb-32"
+                className="flex w-full max-w-3xl flex-1 flex-col items-center justify-center px-4 pb-8 pt-6 sm:px-6 md:pb-32"
               >
-                <h1 className="text-[32px] font-semibold text-slate-100 mb-8 tracking-tight">
+                <h1 className="mb-6 text-center text-2xl font-semibold tracking-tight text-slate-100 sm:mb-8 sm:text-[32px]">
                   What are you working on?
                 </h1>
                 
@@ -354,14 +388,14 @@ function App() {
                 key="chat"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="w-full flex-1 flex flex-col items-center overflow-hidden"
+                className="flex w-full min-h-0 flex-1 flex-col items-center overflow-hidden"
               >
                 {/* Chat Feed */}
                 <div 
                   ref={feedRef}
-                  className="w-full flex-1 overflow-y-auto scroll-smooth py-8 px-4"
+                  className="w-full flex-1 overflow-y-auto scroll-smooth px-3 py-4 sm:px-4 sm:py-8"
                 >
-                  <div className="max-w-3xl mx-auto flex flex-col gap-6">
+                  <div className="mx-auto flex max-w-3xl flex-col gap-4 sm:gap-6">
                     {messages.map(msg => (
                       <MessageBubble key={msg.id} {...msg} />
                     ))}
@@ -369,7 +403,7 @@ function App() {
                 </div>
 
                 {/* Bottom Input Area */}
-                <div className="w-full max-w-3xl px-6 pb-6 pt-2 bg-gradient-to-t from-background via-background to-transparent relative z-10">
+                <div className="relative z-10 w-full max-w-3xl bg-gradient-to-t from-background via-background to-transparent px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 sm:px-6 sm:pb-6">
                   <OmniInput
                     onSubmit={handleSubmit}
                     onFileUpload={handleFileUpload}

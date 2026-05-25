@@ -110,10 +110,10 @@ export default function Dashboard() {
     : 0;
 
   return (
-    <div className="flex-1 overflow-y-auto p-8 max-w-6xl mx-auto w-full">
+    <div className="mx-auto w-full max-w-6xl flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
       
-      <div className="mb-10">
-        <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
+      <div className="mb-6 sm:mb-10">
+        <h1 className="mb-2 flex items-center gap-3 text-2xl font-bold text-white sm:text-3xl">
           <Activity className="text-indigo-400" />
           Platform Overview
         </h1>
@@ -121,12 +121,12 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-12">
-        <div className="bg-panel border border-border p-6 rounded-2xl flex flex-col">
+      <div className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 lg:mb-12 lg:grid-cols-4">
+        <div className="flex flex-col rounded-2xl border border-border bg-panel p-4 sm:p-6">
           <span className="text-slate-400 text-sm font-medium mb-1 flex items-center gap-2"><BarChart size={16}/> Total Requests</span>
           <span className="text-3xl font-bold text-white">{totalRequests}</span>
         </div>
-        <div className="bg-panel border border-border p-6 rounded-2xl flex flex-col">
+        <div className="flex flex-col rounded-2xl border border-border bg-panel p-4 sm:p-6">
           <span className="text-slate-400 text-sm font-medium mb-1 flex items-center gap-2"><AlertCircle size={16}/> Error Rate</span>
           <span className="text-3xl font-bold text-rose-400">
             {totalRequests > 0
@@ -134,19 +134,19 @@ export default function Dashboard() {
               : 0}%
           </span>
         </div>
-        <div className="bg-panel border border-border p-6 rounded-2xl flex flex-col">
+        <div className="flex flex-col rounded-2xl border border-border bg-panel p-4 sm:p-6">
           <span className="text-slate-400 text-sm font-medium mb-1 flex items-center gap-2"><Clock size={16}/> Avg Latency</span>
           <span className="text-3xl font-bold text-emerald-400">
             {avgLatencyMs}ms
           </span>
         </div>
-        <div className="bg-panel border border-border p-6 rounded-2xl flex flex-col">
+        <div className="flex flex-col rounded-2xl border border-border bg-panel p-4 sm:p-6">
           <span className="text-slate-400 text-sm font-medium mb-1 flex items-center gap-2"><Key size={16}/> Active Keys</span>
           <span className="text-3xl font-bold text-white">{apiKeys.filter(k => k.is_active).length}</span>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:gap-8">
         
         {/* API Keys Section */}
         <div className="lg:col-span-2 flex flex-col gap-4">
@@ -162,19 +162,19 @@ export default function Dashboard() {
           
           <div className="bg-panel border border-border rounded-2xl overflow-hidden">
             <div className="p-4 border-b border-border bg-black/20">
-              <form onSubmit={handleCreateKey} className="flex gap-2">
+              <form onSubmit={handleCreateKey} className="flex flex-col gap-2 sm:flex-row">
                 <input 
                   type="text" 
                   value={newKeyName}
                   onChange={(e) => setNewKeyName(e.target.value)}
                   placeholder="New API Key Name" 
-                  className="flex-1 bg-black/40 border border-border rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50"
+                  className="min-w-0 flex-1 rounded-xl border border-border bg-black/40 px-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50"
                   required
                 />
                 <button 
                   type="submit" 
                   disabled={creatingKey || !newKeyName.trim()}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2 transition-colors disabled:opacity-50"
+                  className="flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
                 >
                   <Plus size={16} /> Create Key
                 </button>
@@ -185,7 +185,7 @@ export default function Dashboard() {
               <div className="p-4 bg-indigo-500/10 border-b border-indigo-500/20">
                 <p className="text-sm text-indigo-300 font-medium mb-2">Save this key now. It will not be shown again.</p>
                 <div className="flex items-center justify-between bg-black/40 px-4 py-3 rounded-xl border border-indigo-500/30">
-                  <code className="text-indigo-200 font-mono text-sm">{newlyCreatedKey}</code>
+                  <code className="min-w-0 break-all pr-3 font-mono text-sm text-indigo-200">{newlyCreatedKey}</code>
                   <button 
                     onClick={() => handleCopy(newlyCreatedKey)}
                     className="text-slate-400 hover:text-white transition-colors p-1"
@@ -198,17 +198,17 @@ export default function Dashboard() {
 
             <div className="divide-y divide-border">
               {apiKeys.map(key => (
-                <div key={key.id} className={`p-4 flex items-center justify-between ${!key.is_active ? 'opacity-50' : ''}`}>
-                  <div>
+                <div key={key.id} className={`flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between ${!key.is_active ? 'opacity-50' : ''}`}>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-3 mb-1">
                       <span className="font-semibold text-slate-200">{key.name}</span>
                       {!key.is_active && <span className="text-[10px] uppercase tracking-wider bg-rose-500/20 text-rose-400 px-2 py-0.5 rounded-full font-bold">Revoked</span>}
                     </div>
-                    <div className="text-xs text-slate-500 font-mono bg-black/30 px-2 py-1 rounded inline-block">
+                    <div className="inline-block max-w-full break-all rounded bg-black/30 px-2 py-1 font-mono text-xs text-slate-500">
                       {key.masked_key}
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center justify-between gap-4 sm:justify-end">
                     <div className="text-right hidden sm:block">
                       <div className="text-xs text-slate-400">Rate Limit</div>
                       <div className="text-sm font-medium text-slate-300">{key.rate_limit_rpm} RPM</div>
