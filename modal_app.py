@@ -25,11 +25,11 @@ rag_models_volume = modal.Volume.from_name("ktgpt-rag-models")
 # ---------------------------------------------------------------------------
 def download_sd_weights():
     """Downloads FLUX.2 Klein 4B weights into the image cache at build time."""
-    from diffusers import FluxPipeline
+    from diffusers import DiffusionPipeline
     import torch
     
     print("Downloading FLUX.2 Klein 4B weights...")
-    FluxPipeline.from_pretrained(
+    DiffusionPipeline.from_pretrained(
         "black-forest-labs/FLUX.2-klein-4B",
         torch_dtype=torch.bfloat16,
         cache_dir=CACHE_DIR,
@@ -95,13 +95,13 @@ api_image = (
 )
 def generate_image_modal(prompt: str, negative_prompt: str = "", width: int = 512, height: int = 512, steps: int = 20):
     """Generates an image using FLUX.2 Klein on a Serverless A10G GPU."""
-    from diffusers import FluxPipeline
+    from diffusers import DiffusionPipeline
     import torch
     import io
     import base64
     
     # Load model (very fast because it's cached in the volume)
-    pipe = FluxPipeline.from_pretrained(
+    pipe = DiffusionPipeline.from_pretrained(
         "black-forest-labs/FLUX.2-klein-4B",
         torch_dtype=torch.bfloat16,
         cache_dir=CACHE_DIR,
