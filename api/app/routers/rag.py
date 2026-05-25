@@ -54,7 +54,7 @@ async def query_knowledge_base(
         # Direct vLLM chat bypassing Qdrant (for demo)
         import httpx
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            async with httpx.AsyncClient(timeout=300.0) as client:
                 res = await client.post(
                     f"{settings.VLLM_API_URL}/v1/chat/completions",
                     json={
