@@ -28,7 +28,7 @@ RUN apt-get update && \
 
 # Python deps
 RUN pip install --no-cache-dir \
-    torch==2.1.2 --index-url https://download.pytorch.org/whl/cpu && \
+    torch==2.3.1 --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir \
     diffusers[torch]>=0.27.0 \
     transformers>=4.38.0 \
