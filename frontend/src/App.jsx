@@ -133,6 +133,8 @@ function App() {
               {messages.map(msg => (
                 <MessageBubble key={msg.id} {...msg} />
               ))}
+              {/* Spacer to clear the absolute-positioned input area */}
+              <div className="h-32 flex-shrink-0" />
             </AnimatePresence>
           )}
         </div>
