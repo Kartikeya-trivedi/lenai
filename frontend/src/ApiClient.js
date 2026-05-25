@@ -9,7 +9,7 @@ const api = axios.create({
 
 // Guarantee headers are injected on every request
 api.interceptors.request.use(config => {
-  const key = localStorage.getItem('lenai_api_key');
+  const key = localStorage.getItem('lenai_api_key') || import.meta.env.VITE_API_KEY;
   if (key) {
     config.headers['X-API-Key'] = key;
   }

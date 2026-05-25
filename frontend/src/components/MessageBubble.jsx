@@ -5,7 +5,7 @@ import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Bot, User, Image as ImageIcon, Loader2, Music } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-export default function MessageBubble({ role, content, modality, mediaUrl, status }) {
+export default function MessageBubble({ role, content, modality, mediaUrl, status, errorMessage }) {
   const isUser = role === 'user';
 
   return (
@@ -86,7 +86,7 @@ export default function MessageBubble({ role, content, modality, mediaUrl, statu
           
           {status === 'failed' && (
             <div className="mt-3 p-3 rounded-lg bg-red-900/20 border border-red-500/30 text-red-400 text-sm">
-              <p className="font-medium">Failed to process request.</p>
+              <p className="font-medium">{errorMessage || 'Failed to process request.'}</p>
             </div>
           )}
         </div>

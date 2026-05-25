@@ -9,8 +9,8 @@ import { Sparkles, Key, Terminal, LayoutDashboard } from 'lucide-react';
 function App() {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('lenai_api_key') || '');
-  const [isAuthenticated, setIsAuthenticated] = useState(() => !!localStorage.getItem('lenai_api_key'));
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('lenai_api_key') || import.meta.env.VITE_API_KEY || '');
+  const [isAuthenticated, setIsAuthenticated] = useState(() => !!(localStorage.getItem('lenai_api_key') || import.meta.env.VITE_API_KEY));
   const [activeTab, setActiveTab] = useState('playground'); // 'playground' | 'dashboard'
   const feedRef = useRef(null);
 
@@ -183,8 +183,14 @@ function App() {
       }
     } catch (error) {
       console.error(error);
-      setMessages(prev => prev.map(msg => 
-        msg.id === botMsgId ? { ...msg, status: 'failed' } : msg
+      let errorMsg = error?.message || 'Unknown error';
+      if (error?.response?.status === 401) {
+        errorMsg = 'Authentication failed — invalid or missing API key. Please sign out and re-enter a valid key.';
+      } else if (error?.response?.data?.detail) {
+        errorMsg = error.response.data.detail;
+      }
+      setMessages(prev => prev.map(msg =>
+        msg.id === botMsgId ? { ...msg, status: 'failed', errorMessage: errorMsg } : msg
       ));
     } finally {
       setIsLoading(false);
